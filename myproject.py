@@ -1,3 +1,4 @@
+import os
 from openpyxl import load_workbook
 
 # Load worksheet
@@ -107,3 +108,17 @@ def row_of_testcase(ws, symbol):
 		cur_cell = coor_shift_down(ws, cur_cell)
 	last_row_of_tc = cur_cell['firstrow'] - 1
 	return first_row_of_tc, last_row_of_tc
+
+def file_write(path, filename, data, position):
+	write_done = False
+	os.rename(path + filename, 'temp.txt')
+	infile = open(path + 'temp.txt', 'r')
+	outfile = open(path + filename, 'w')
+	for line in infile:
+		outfile.write(line)
+		if (position in line) and (write_done == False):
+			outfile.write(data)
+			write_done = True
+	infile.close()
+	outfile.close()
+	os.remove(path + 'temp.txt')
