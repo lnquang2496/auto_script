@@ -1,9 +1,10 @@
-import os
+import os, sys, getopt
 from openpyxl import load_workbook
+from shutil import copyfile
 
 # Load worksheet
 def load_worksheet(filename, sheetname):
-	wb = load_workbook(filename)
+	wb = load_workbook(filename, data_only=True)
 	ws = wb[sheetname]
 	return ws
 
@@ -103,11 +104,12 @@ def coor_shift_down(ws, coor):
 # Get test case row
 def row_of_testcase(ws, symbol):
 	cur_cell = find_cell(ws, symbol)
+	col_of_tc = cur_cell['firstcol']
 	first_row_of_tc = cur_cell['lastrow'] + 1
 	while (get_cell_value(ws, cur_cell) != None):
 		cur_cell = coor_shift_down(ws, cur_cell)
 	last_row_of_tc = cur_cell['firstrow'] - 1
-	return first_row_of_tc, last_row_of_tc
+	return first_row_of_tc, last_row_of_tc, col_of_tc
 
 def file_write(path, filename, data, position):
 	write_done = False
@@ -122,3 +124,126 @@ def file_write(path, filename, data, position):
 	infile.close()
 	outfile.close()
 	os.remove(path + 'temp.txt')
+
+def get_data(ws, target, input_range, tc_row):
+	data = ''
+	input_cell = coor_shift_down(ws, input_range)
+	while input_cell['lastcol'] <= input_range['lastcol']:
+		# Check [a]
+		cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], tc_row]))
+		if (target in get_cell_value(ws, input_cell)):
+			data = data + cur_input_param + ', '
+		input_cell = coor_shift_right(ws, input_cell)
+	return data
+
+def is_file_created(dir, file):
+	check_dir = ".\\" + str(file) 
+	if (os.path.isfile(check_dir)):
+		f = open('%s' % file, 'a')
+	else:
+		f = open('%s' % file, 'w')
+	return f
+
+# Main function
+def main(argv):
+	check_sequence = False
+	try:
+		opts, args = getopt.getopt(argv,"hid:i:ws:se:",["idir=","ifile=","wsheet=","check_seq"])
+	except getopt.GetoptError:
+		print("test.py --idir <inputfir> --ifile <inputfile> --wsheet <worksheet> --check_seq <True/False>")
+		sys.exit(2)
+	for opt, arg in opts:
+		if opt == '-h':
+			print("test.py --idir <inputfir> --ifile <inputfile> --wsheet <worksheet>")
+			sys.exit()
+		elif opt in ("-id", "--idir"):
+			inputdir = arg
+		elif opt in ("-i", "--ifile"):
+			inputfile = arg
+		elif opt in ("-ws", "--wsheet"):
+			worksheet = arg
+		elif opt in ("-se", "--check_seq"):
+			check_sequence = arg
+
+	# Get working sheet
+	ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
+	# Get Test case start row and end row
+	tc_sta_row, tc_end_row, tc_col = row_of_testcase(ws, '#')
+	# Get Input factor range
+	input_factor = find_cell(ws, 'Input factor')
+	# Get Output element range
+	output_element = find_cell(ws, 'Output element')
+
+	# Create file .h
+	dot_h = open('test_' + worksheet + '.h', 'w')
+	# Begin of file
+	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	dot_h.write(data)
+	# Add test case
+	# Input factor
+	for tc_row in range(tc_sta_row, tc_end_row + 1):
+		# Reset data
+		data = '\t{'
+		# Add test case number to data
+		tc_num = get_cell_value(ws, find_cell(ws, [tc_col, tc_row]))
+		data = data + '\"' + tc_num + '\"' + ', '
+		
+		# Add description to data
+		describe = find_cell(ws, 'Item')
+		data = data + '\"' + get_cell_value(ws, find_cell(ws, [describe['firstcol'], tc_row])) + '\"' + ', '
+		del describe
+		
+		# Add expected calls sequence
+		# In case not check sequence of calling stub function
+		input_cell = coor_shift_down(ws, input_factor)
+		if (check_sequence == False):
+			data = data + '"{'
+
+			while input_cell['lastcol'] <= input_factor['lastcol']:
+				# Check [rt] symbol for getting function name
+				cur_func = get_cell_value(ws, input_cell)
+				if ('[rt]' in cur_func):
+					data = data + '{' + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + '}'
+				input_cell = coor_shift_right(ws, input_cell)
+			
+			data = data + '}"' + ', '
+
+		else:
+			data = data + '"{'
+
+			while input_cell['lastcol'] <= input_factor['lastcol']:
+				# Check [rt] symbol for getting function name
+				cur_func = get_cell_value(ws, input_cell)
+				if ('[rt]' in cur_func):
+					data = data  + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + ';'
+				input_cell = coor_shift_right(ws, input_cell)
+			
+			data = data[:-1] + '}"' + ', '
+		del input_cell, cur_func
+
+		# Add execute
+		data = data + '1' + ', '
+
+		# Add input param
+		data = data + get_data(ws, '[a]', input_factor, tc_row)
+
+		# Add global variable
+		data = data + get_data(ws, '[g]', input_factor, tc_row)
+
+		# Add expected global variable
+		data = data + get_data(ws, '[g]', output_element, tc_row)
+
+		# Add test result
+		data = data + get_data(ws, 'Return value', output_element, tc_row)
+
+		# Write to file
+		data = data[:-2] + '},\n'
+		dot_h.write(data)
+
+	# End of file
+	data = '};\n'
+	dot_h.write(data)
+	dot_h.close()
+
+if __name__ == "__main__":
+	main(sys.argv[1:])
