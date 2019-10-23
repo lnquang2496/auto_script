@@ -112,6 +112,7 @@ def row_of_testcase(ws, symbol):
 	last_row_of_tc = cur_cell['firstrow'] - 1
 	return first_row_of_tc, last_row_of_tc, col_of_tc
 
+# Append text to file
 def file_write(path, filename, data, position):
 	write_done = False
 	count = 0
@@ -135,6 +136,7 @@ def file_write(path, filename, data, position):
 	outfile.close()
 	os.remove(path + 'temp.txt')
 
+# Extract data from PCL with specific target
 def get_data(ws, target, input_range, tc_row):
 	data = ''
 	input_cell = coor_shift_down(ws, input_range)
@@ -145,6 +147,7 @@ def get_data(ws, target, input_range, tc_row):
 		input_cell = coor_shift_right(ws, input_cell)
 	return data
 
+# Check if file is created or not, and use attribute to open file
 def is_file_created(dir, file):
 	check_dir = ".\\" + str(file)
 	if (os.path.isfile(check_dir)):
@@ -153,9 +156,143 @@ def is_file_created(dir, file):
 		f = open('%s' % file, 'w')
 	return f
 
+# Create file .h contrain test case
+def create_test_case_file(ws, worksheet, check_sequence=False):
+	# Get Test case start row and end row
+	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+	# Get Input factor range
+	input_factor = find_cell(ws, 'Input factor')
+	# Get Output element range
+	output_element = find_cell(ws, 'Output element')
+	# Create file .h
+	dot_h = open('test_' + worksheet + '.h', 'w')
+	# Begin of file
+	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	dot_h.write(data)
+	# Add test case
+	# Input factor
+	for cur_row in range(start_row, end_row + 1):
+		# Reset data
+		data = '\t{'
+		# Add test case number to data
+		tc_num = get_cell_value(ws, find_cell(ws, [testcase_col, cur_row]))
+		data = data + '\"' + tc_num + '\"' + ', '
+		del start_row, end_row, testcase_col
+
+		# Add description to data - Named: Item
+		describe = find_cell(ws, 'Item')
+		data = data + '\"' + get_cell_value(ws, find_cell(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
+		del describe
+
+		# Add expected calls sequence
+		# In case not check sequence of calling stub function
+		input_cell = coor_shift_down(ws, input_factor)
+		if (check_sequence == False):
+			data = data + '"{'
+			while input_cell['lastcol'] <= input_factor['lastcol']:
+				# Check [rt] symbol for getting function name
+				cur_func = get_cell_value(ws, input_cell)
+				if ('[rt]' in cur_func):
+					data = data + '{' + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + '}'
+				input_cell = coor_shift_right(ws, input_cell)
+			data = data + '}"' + ', '
+
+		else:
+			data = data + '"{'
+			while input_cell['lastcol'] <= input_factor['lastcol']:
+				# Check [rt] symbol for getting function name
+				cur_func = get_cell_value(ws, input_cell)
+				if ('[rt]' in cur_func):
+					data = data  + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + ';'
+				input_cell = coor_shift_right(ws, input_cell)
+			data = data[:-1] + '}"' + ', '
+		del input_cell, cur_func
+
+		# Add execute - 1: execute this function
+		data = data + '1' + ', '
+
+		# Add input param by detect [a]
+		data = data + get_data(ws, '[a]', input_factor, cur_row)
+
+		# Add global variable by detect [g]
+		data = data + get_data(ws, '[g]', input_factor, cur_row)
+
+		# Add expected global variable by detect [g] in output element
+		data = data + get_data(ws, '[g]', output_element, cur_row)
+
+		# Add test result by detect 'Return value' in output element
+		data = data + get_data(ws, 'Return value', output_element, cur_row)
+
+		# Write all the data to file
+		data = data[:-2] + '},\n'
+		dot_h.write(data)
+
+	# End of file
+	data = '};\n'
+	dot_h.write(data)
+	dot_h.close()
+	del dot_h
+
+#
+def create_stub_file(ws, worksheet, src_dir, src):
+	# Create stub function
+	dot_c = open('test_' + worksheet + '.c', 'w')
+	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+
+	for cur_row in range(start_row, end_row + 1):
+		# Get test case number
+		tc_num = get_cell_value(ws, find_cell(ws, [testcase_col, cur_row]))
+		# Create instance for test case num
+
+		input_cell = coor_shift_down(ws, input_factor)
+		while input_cell['lastcol'] <= input_factor['lastcol']:
+			# Check [rt]
+			cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+
+			if ('[rt]' in get_cell_value(ws, input_cell)):
+				# Get function name
+				func_name = get_cell_value(ws, input_cell)
+				# Extract function name from [rt]type function_name(...);
+				func_name = func_name[func_name.find(' ') + 1: func_name.find('(')]
+				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
+				title = '/* Isolate for function %s */\n' %(func_name)
+				# Set instance
+				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num)
+				outval_data = ''
+				# TODO: Check function input param in Output element
+
+				# Function output value
+				if input_cell['lastcol'] < input_factor['lastcol']:
+					outval_range = coor_shift_right(ws, input_cell)
+					if ('[f]' in get_cell_value(ws, outval_range)):
+						outval_cell = coor_shift_down(ws, outval_range)
+						while outval_cell['lastcol'] <= outval_range['lastcol']:
+							outval = get_cell_value(ws, find_cell(ws, [outval_cell['firstcol'], cur_row]))
+							if (outval != None) and (outval != '-'):
+								outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
+								+ outval + ';\n'
+							outval_cell = coor_shift_right(ws, outval_cell)
+
+				data_return = '\t\treturn ' + get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row])) + ';\n\t}\n'
+				data = if_instance + outval_data + data_return
+
+				# Get position for append data to source
+				position = [title, 'IF_INSTANCE("default")', '}']
+				# Write file to test program of Cantata
+				file_write(src_dir, 'test_' + src + '.c', data, position)
+
+				data = title + data
+				dot_c.write(data)
+
+			input_cell = coor_shift_right(ws, input_cell)
+	dot_c.close()
+
+	cantata_wp = 'C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests'
+	cantata_test_program = 'test_r_imr_osal_ctl.c'
+	
+
 # Main function
 def main(argv):
-	check_sequence = False
 	try:
 		opts, args = getopt.getopt(argv,"hid:i:ws:sr:se:",["idir=","ifile=","wsheet=","source=","check_seq="])
 	except getopt.GetoptError:
@@ -178,131 +315,13 @@ def main(argv):
 
 	# Get working sheet
 	ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
-	# Get Test case start row and end row
-	tc_sta_row, tc_end_row, tc_col = row_of_testcase(ws, '#')
-	# Get Input factor range
-	input_factor = find_cell(ws, 'Input factor')
-	# Get Output element range
-	output_element = find_cell(ws, 'Output element')
 
-	# Create file .h
-	dot_h = open('test_' + worksheet + '.h', 'w')
-	# Begin of file
-	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
-	dot_h.write(data)
-	# Add test case
-	# Input factor
-	for tc_row in range(tc_sta_row, tc_end_row + 1):
-		# Reset data
-		data = '\t{'
-		# Add test case number to data
-		tc_num = get_cell_value(ws, find_cell(ws, [tc_col, tc_row]))
-		data = data + '\"' + tc_num + '\"' + ', '
+	# Create file dot h, contain all the test case
+	create_test_case_file(ws, worksheet, check_sequence)
 
-		# Add description to data
-		describe = find_cell(ws, 'Item')
-		data = data + '\"' + get_cell_value(ws, find_cell(ws, [describe['firstcol'], tc_row])) + '\"' + ', '
-		del describe
+	create_stub_file(ws, worksheet, src_dir, source)
+	src_dir = 'C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests\\test_r_imr_osal_ctl\\'
 
-		# Add expected calls sequence
-		# In case not check sequence of calling stub function
-		input_cell = coor_shift_down(ws, input_factor)
-		if (check_sequence == False):
-			data = data + '"{'
-			while input_cell['lastcol'] <= input_factor['lastcol']:
-				# Check [rt] symbol for getting function name
-				cur_func = get_cell_value(ws, input_cell)
-				if ('[rt]' in cur_func):
-					data = data + '{' + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + '}'
-				input_cell = coor_shift_right(ws, input_cell)
-			data = data + '}"' + ', '
-
-		else:
-			data = data + '"{'
-
-			while input_cell['lastcol'] <= input_factor['lastcol']:
-				# Check [rt] symbol for getting function name
-				cur_func = get_cell_value(ws, input_cell)
-				if ('[rt]' in cur_func):
-					data = data  + cur_func[cur_func.find(' ') + 1 : cur_func.find('(')] + '#' + tc_num + ';'
-				input_cell = coor_shift_right(ws, input_cell)
-			data = data[:-1] + '}"' + ', '
-		del input_cell, cur_func
-
-		# Add execute
-		data = data + '1' + ', '
-
-		# Add input param
-		data = data + get_data(ws, '[a]', input_factor, tc_row)
-
-		# Add global variable
-		data = data + get_data(ws, '[g]', input_factor, tc_row)
-
-		# Add expected global variable
-		data = data + get_data(ws, '[g]', output_element, tc_row)
-
-		# Add test result
-		data = data + get_data(ws, 'Return value', output_element, tc_row)
-
-		# Write to file
-		data = data[:-2] + '},\n'
-		dot_h.write(data)
-
-	# End of file
-	data = '};\n'
-	dot_h.write(data)
-	dot_h.close()
-	del dot_h
-
-	# Create stub function
-	dot_c = open('test_' + worksheet + '.c', 'w')
-
-	for tc_row in range(tc_sta_row, tc_end_row + 1):
-		# Get test case number
-		tc_num = get_cell_value(ws, find_cell(ws, [tc_col, tc_row]))
-		# Create instance for test case num
-
-		input_cell = coor_shift_down(ws, input_factor)
-		while input_cell['lastcol'] <= input_factor['lastcol']:
-			# Check [rt]
-			cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], tc_row]))
-
-			if ('[rt]' in get_cell_value(ws, input_cell)):
-				func_name = get_cell_value(ws, input_cell)
-				func_name = func_name[func_name.find(' ') + 1: func_name.find('(')]
-				title = '/* Isolate for function %s */\n' %(func_name)
-				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num)
-				outval_data = ''
-				# TODO: Check function input param in Output element
-
-				# Function output value
-				if input_cell['lastcol'] < input_factor['lastcol']:
-					outval_range = coor_shift_right(ws, input_cell)
-					if ('[f]' in get_cell_value(ws, outval_range)):
-						outval_cell = coor_shift_down(ws, outval_range)
-						while outval_cell['lastcol'] <= outval_range['lastcol']:
-							outval = get_cell_value(ws, find_cell(ws, [outval_cell['firstcol'], tc_row]))
-							if (outval != None) and (outval != '-'):
-								outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
-								+ outval + ';\n'
-							outval_cell = coor_shift_right(ws, outval_cell)
-
-				data_return = '\t\treturn ' + get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], tc_row])) + ';\n\t}\n'
-				data = if_instance + outval_data + data_return
-
-				# Data
-				position = [title, 'IF_INSTANCE("default")', '}']
-				file_write('C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests\\test_r_imr_osal_ctl\\', 'test_' + source + '.c', data, position)
-
-				data = title + data
-				dot_c.write(data)
-
-			input_cell = coor_shift_right(ws, input_cell)
-	dot_c.close()
-
-	cantata_wp = 'C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests'
-	cantata_test_program = 'test_r_imr_osal_ctl.c'
-	
 
 if __name__ == "__main__":
 	main(sys.argv[1:])
