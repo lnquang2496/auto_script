@@ -137,13 +137,24 @@ def file_write(path, filename, data, position):
 	os.remove(path + 'temp.txt')
 
 # Extract data from PCL with specific target
-def get_data(ws, target, input_range, tc_row):
+def get_data(ws, target, input_range, cur_row):
 	data = ''
 	input_cell = coor_shift_down(ws, input_range)
 	while input_cell['lastcol'] <= input_range['lastcol']:
-		cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], tc_row]))
+		# Check input cell merged rang, if merge range use {var1, var2}
 		if (target in get_cell_value(ws, input_cell)):
-			data = data + cur_input_param + ', '
+			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
+				cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+				data = data + cur_input_param + ', '
+			else:
+				data = data + '{'
+				element_cell = coor_shift_down(ws, input_cell)
+				while element_cell['lastcol'] <= input_cell['lastcol']:
+					cur_input_param = get_cell_value(ws, find_cell(ws, [element_cell['firstcol'], cur_row]))
+					data = data + cur_input_param + ', '
+					element_cell = coor_shift_right(ws, element_cell)
+				data = data[:-2] + '}, '
+
 		input_cell = coor_shift_right(ws, input_cell)
 	return data
 
@@ -177,7 +188,6 @@ def create_test_case_file(ws, worksheet, check_sequence=False):
 		# Add test case number to data
 		tc_num = get_cell_value(ws, find_cell(ws, [testcase_col, cur_row]))
 		data = data + '\"' + tc_num + '\"' + ', '
-		del start_row, end_row, testcase_col
 
 		# Add description to data - Named: Item
 		describe = find_cell(ws, 'Item')
@@ -212,6 +222,8 @@ def create_test_case_file(ws, worksheet, check_sequence=False):
 		data = data + '1' + ', '
 
 		# Add input param by detect [a]
+		# TODO: Add detect structure - DONE
+
 		data = data + get_data(ws, '[a]', input_factor, cur_row)
 
 		# Add global variable by detect [g]
@@ -238,6 +250,10 @@ def create_stub_file(ws, worksheet, src_dir, src):
 	# Create stub function
 	dot_c = open('test_' + worksheet + '.c', 'w')
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+	# Get Input factor range
+	input_factor = find_cell(ws, 'Input factor')
+	# Get Output element range
+	output_element = find_cell(ws, 'Output element')
 
 	for cur_row in range(start_row, end_row + 1):
 		# Get test case number
@@ -259,7 +275,21 @@ def create_stub_file(ws, worksheet, src_dir, src):
 				# Set instance
 				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num)
 				outval_data = ''
-				# TODO: Check function input param in Output element
+
+				check_data = ''
+				output_cell = coor_shift_down(ws, output_element) 
+				while output_cell['lastcol'] <= output_element['lastcol']:
+					# Check [f] symbol and check the function name
+					if ('[f]' in get_cell_value(ws, output_cell)) and (func_name in get_cell_value(ws, output_cell)):
+						check_point = coor_shift_down(ws, output_cell)
+						while check_point['lastcol'] <= output_cell['lastcol']:
+							# TODO: add replace 'CHECK_S_INT'
+							check_point_val = get_cell_value(ws, find_cell(ws, [check_point['firstcol'] , cur_row]))
+							if (check_point_val != None) and (check_point_val) != '-':
+								check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+
+							check_point = coor_shift_right(ws, check_point)
+					output_cell = coor_shift_right(ws, output_cell)
 
 				# Function output value
 				if input_cell['lastcol'] < input_factor['lastcol']:
@@ -274,7 +304,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 							outval_cell = coor_shift_right(ws, outval_cell)
 
 				data_return = '\t\treturn ' + get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row])) + ';\n\t}\n'
-				data = if_instance + outval_data + data_return
+				data = if_instance + check_data + outval_data + data_return
 
 				# Get position for append data to source
 				position = [title, 'IF_INSTANCE("default")', '}']
@@ -287,20 +317,17 @@ def create_stub_file(ws, worksheet, src_dir, src):
 			input_cell = coor_shift_right(ws, input_cell)
 	dot_c.close()
 
-	cantata_wp = 'C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests'
-	cantata_test_program = 'test_r_imr_osal_ctl.c'
-	
 
 # Main function
 def main(argv):
 	try:
-		opts, args = getopt.getopt(argv,"hid:i:ws:sr:se:",["idir=","ifile=","wsheet=","source=","check_seq="])
+		opts, args = getopt.getopt(argv,"hid:i:ws:sr:se:ca:",["idir=","ifile=","wsheet=","source=","check_seq=","can_dir="])
 	except getopt.GetoptError:
-		print("test.py --idir <inputfir> --ifile <inputfile> --wsheet <worksheet> --check_seq <True/False> --source <source>")
+		print("--idir <inputfir> --ifile <inputfile> --wsheet <worksheet> --check_seq <True/False> --source <source>")
 		sys.exit(2)
 	for opt, arg in opts:
 		if opt == '-h':
-			print("test.py --idir <inputfir> --ifile <inputfile> --wsheet <worksheet>")
+			print("--idir <inputfir> --ifile <inputfile> --wsheet <worksheet>")
 			sys.exit()
 		elif opt in ("-id", "--idir"):
 			inputdir = arg
@@ -312,6 +339,8 @@ def main(argv):
 			source = arg
 		elif opt in ("-se", "--check_seq"):
 			check_sequence = arg
+		elif opt in ("-ca", "--can_dir"):
+			src_dir = arg + '\\'
 
 	# Get working sheet
 	ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
@@ -319,9 +348,8 @@ def main(argv):
 	# Create file dot h, contain all the test case
 	create_test_case_file(ws, worksheet, check_sequence)
 
+	src_dir = src_dir + 'test_' + source + '\\'
 	create_stub_file(ws, worksheet, src_dir, source)
-	src_dir = 'C:\\Users\\quangla\\workspace\\test_imr_ut\\Cantata\\tests\\test_r_imr_osal_ctl\\'
-
 
 if __name__ == "__main__":
 	main(sys.argv[1:])
