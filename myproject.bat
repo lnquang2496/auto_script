@@ -7,7 +7,7 @@ if exist output del /q output
 
 call python reset_stub_instance.py --can_dir %CAN_WP% --source r_imr_osal_ctl
 
-call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_ctl_start --source r_imr_osal_ctl --check_seq True --can_dir %CAN_WP%
+call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_ctl_start --source r_imr_osal_ctl --check_seq False --can_dir %CAN_WP%
 
-copy test_r_imr_osal_ctl_start.h %CAN_WP%\test_r_imr_osal_ctl\test_r_imr_osal_ctl_start.h
-del /q test_r_imr_osal_ctl_start.h
+REM copy test_r_imr_osal_ctl_start.h %CAN_WP%\test_r_imr_osal_ctl\test_r_imr_osal_ctl_start.h
+REM del /q test_r_imr_osal_ctl_start.h
