@@ -276,6 +276,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num)
 				outval_data = ''
 
+				# CHECK DATA input of stub function
 				check_data = ''
 				output_cell = coor_shift_down(ws, output_element) 
 				while output_cell['lastcol'] <= output_element['lastcol']:
@@ -283,10 +284,22 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					if ('[f]' in get_cell_value(ws, output_cell)) and (func_name in get_cell_value(ws, output_cell)):
 						check_point = coor_shift_down(ws, output_cell)
 						while check_point['lastcol'] <= output_cell['lastcol']:
-							# TODO: add replace 'CHECK_S_INT'
+
+							# TODO: add replace 'CHECK_S_INT' - Done
 							check_point_val = get_cell_value(ws, find_cell(ws, [check_point['firstcol'] , cur_row]))
 							if (check_point_val != None) and (check_point_val) != '-':
-								check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+
+								# Classify the check value
+								if ('UTS_NON0' in check_point_val):
+									check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + get_cell_value(ws, check_point) + ' != NULL)' + ', true);\n'
+								elif ('NULL' in check_point_val) or (check_point_val.isupper()):
+									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+								elif (check_point_val.isdigit()):
+									check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+								elif ('u' or 'U' in check_point_val):
+									check_data = check_data + '\t\t' + 'CHECK_U_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+								else:
+									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
 
 							check_point = coor_shift_right(ws, check_point)
 					output_cell = coor_shift_right(ws, output_cell)
