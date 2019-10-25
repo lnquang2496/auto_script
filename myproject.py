@@ -237,6 +237,9 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# Add global variable by detect [g]
 		data = data + get_data(ws, '[g]', input_factor, cur_row)
 
+		# TODO: Add detect check [a] param output
+		data = data + get_data(ws, '[a]', output_element, cur_row)
+
 		# Add expected global variable by detect [g] in output element
 		data = data + get_data(ws, '[g]', output_element, cur_row)
 
@@ -325,7 +328,9 @@ def create_stub_file(ws, worksheet, src_dir, src):
 								+ outval + ';\n'
 							outval_cell = coor_shift_right(ws, outval_cell)
 
-				data_return = '\t\treturn ' + get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row])) + ';\n\t}\n'
+				return_value = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+				if return_value != None and return_value != '-':
+					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
 				data = if_instance + check_data + outval_data + data_return
 
 				# Get position for append data to source
