@@ -1,7 +1,9 @@
 import os, sys, getopt
+# openpyxl = 2.6.2
 from openpyxl import load_workbook
 from shutil import copyfile
-import shutil
+# tqdm = 4.36.1
+from tqdm import tqdm
 
 # Load worksheet
 def load_worksheet(filename, sheetname):
@@ -68,12 +70,16 @@ def find_cell(ws, target, match_case=False, find_all=False):
 
 # Get cell value with cell coordinate
 def get_cell_value(ws, coor):
-	for row in range (coor['firstrow'], coor['lastrow'] + 1):
-		for col in range (coor['firstcol'], coor['lastcol'] + 1):
-			val = ws.cell(column=col, row=row).value
-			if (val != None):
-				return val
-	#print("Coordinate \'%s\': is blank" %(coor))
+	if isinstance(coor, list):
+		val = ws.cell(column=coor[0], row=coor[1]).value
+		return val
+	else:
+		for row in range (coor['firstrow'], coor['lastrow'] + 1):
+			for col in range (coor['firstcol'], coor['lastcol'] + 1):
+				val = ws.cell(column=col, row=row).value
+				if (val != None):
+					return val
+		#print("Coordinate \'%s\': is blank" %(coor))
 	return None
 
 # Shift 'right' cell
@@ -144,13 +150,13 @@ def get_data(ws, target, input_range, cur_row):
 		# Check input cell merged rang, if merge range use {var1, var2}
 		if (target in get_cell_value(ws, input_cell)):
 			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
-				cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
 				data = data + cur_input_param + ', '
 			else:
 				data = data + '{'
 				element_cell = coor_shift_down(ws, input_cell)
 				while element_cell['lastcol'] <= input_cell['lastcol']:
-					cur_input_param = get_cell_value(ws, find_cell(ws, [element_cell['firstcol'], cur_row]))
+					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
 					data = data + cur_input_param + ', '
 					element_cell = coor_shift_right(ws, element_cell)
 				data = data[:-2] + '}, '
@@ -188,43 +194,45 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# Reset data
 		data = '\t{'
 		# Add test case number to data
-		tc_num = get_cell_value(ws, find_cell(ws, [testcase_col, cur_row]))
+		tc_num = get_cell_value(ws, [testcase_col, cur_row])
 		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
 		data = data + '\"' + tc_num + '\"' + ', '
 
 		# Add description to data - Named: Item
 		describe = find_cell(ws, 'Item')
-		data = data + '\"' + get_cell_value(ws, find_cell(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
+		data = data + '\"' + get_cell_value(ws, [describe['firstcol'], cur_row]) + '\"' + ', '
 		del describe
 
 		# Add expected calls sequence
 		# In case not check sequence of calling stub function
-		input_cell = coor_shift_down(ws, input_factor)
-		if (check_sequence == True):
-			data = data + '"'
-			while input_cell['lastcol'] <= input_factor['lastcol']:
-				# Check [rt] symbol for getting function name
-				cur_func = get_cell_value(ws, input_cell)
-				if ('[rt]' in cur_func):
-					func_name = cur_func[cur_func.find(' ') + 1 : cur_func.find('(')]
-					func_return_val = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
-					if (func_return_val != None) and (func_return_val != '-'):
-						data = data  + func_name + '#' + tc_num + '; '
-				input_cell = coor_shift_right(ws, input_cell)
-			data = data + '"' + ', '
+		# TODO: Add feature: many instance in sequence
 
-		elif (check_sequence == False):
-			data = data + '"{'
-			while input_cell['lastcol'] <= input_factor['lastcol']:
-				# Check [rt] symbol for getting function name
-				cur_func = get_cell_value(ws, input_cell)
-				if ('[rt]' in cur_func):
-					func_name = cur_func[cur_func.find(' ') + 1 : cur_func.find('(')]
-					func_return_val = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
-					if (func_return_val != None) and (func_return_val != '-'):
-						data = data + '{' + func_name + '#' + tc_num + '}'
-				input_cell = coor_shift_right(ws, input_cell)
-			data = data + '}"' + ', '
+		data = data + '"'
+		CELL = coor_shift_down(ws, input_factor)
+		list_of_function_called = list()
+		while CELL['lastcol'] <= input_factor['lastcol']:
+			CELL_VAL = get_cell_value(ws, CELL)
+			if ('[rt]' in CELL_VAL):
+				# Get function name from [rt]Error MyFunction(int a, int b);
+				#                                  MyFunction
+				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
+				del CELL_VAL
+				# Check loop of instance
+				if (FNAME not in dict(list_of_function_called)):
+					list_of_function_called.append([FNAME, 0])
+				else:
+					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
+				# Check is this instance called
+				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
+				if (FRETVAL != None) and (FRETVAL != '-'):
+					FUNCINSTANCE = FNAME + '#' + tc_num + '_' + list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+
+				if check_sequence == True:
+					data = data + FUNCINSTANCE + '; '
+				else:
+					data = data + '{' + FUNCINSTANCE + '} '
+		data = data + '"'
 
 		# Add execute - 1: execute this function
 		data = data + '1' + ', '
@@ -237,7 +245,7 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# Add global variable by detect [g]
 		data = data + get_data(ws, '[g]', input_factor, cur_row)
 
-		# TODO: Add detect check [a] param output
+		# TODO: Add detect check [a] param output - DONE
 		data = data + get_data(ws, '[a]', output_element, cur_row)
 
 		# Add expected global variable by detect [g] in output element
@@ -268,24 +276,34 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 	for cur_row in range(start_row, end_row + 1):
 		# Get test case number
-		tc_num = get_cell_value(ws, find_cell(ws, [testcase_col, cur_row]))
+		tc_num = get_cell_value(ws, [testcase_col, cur_row]))
 		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
 		# Create instance for test case num
 
+		list_of_function_called = list()
 		input_cell = coor_shift_down(ws, input_factor)
 		while input_cell['lastcol'] <= input_factor['lastcol']:
 			# Check [rt]
-			cur_input_param = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+			cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
 
 			if ('[rt]' in get_cell_value(ws, input_cell)):
+				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
+				del CELL_VAL
+				# Check loop of instance
+				if (FNAME not in dict(list_of_function_called)):
+					list_of_function_called.append([FNAME, 0])
+				else:
+					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
+
 				# Get function name
-				func_name = get_cell_value(ws, input_cell)
+				FNAME = get_cell_value(ws, input_cell)
 				# Extract function name from [rt]type function_name(...);
-				func_name = func_name[func_name.find(' ') + 1: func_name.find('(')]
+				FNAME = FNAME[FNAME.find(' ') + 1: FNAME.find('(')]
 				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
-				title = '/* Isolate for function %s */\n' %(func_name)
+				title = '/* Isolate for function %s */\n' %(FNAME)
 				# Set instance
-				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num)
+				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num + '_' + list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
 				outval_data = ''
 
 				# CHECK DATA input of stub function
@@ -293,12 +311,12 @@ def create_stub_file(ws, worksheet, src_dir, src):
 				output_cell = coor_shift_down(ws, output_element) 
 				while output_cell['lastcol'] <= output_element['lastcol']:
 					# Check [f] symbol and check the function name
-					if ('[f]' in get_cell_value(ws, output_cell)) and (func_name in get_cell_value(ws, output_cell)):
+					if ('[f]' in get_cell_value(ws, output_cell)) and (FNAME in get_cell_value(ws, output_cell)):
 						check_point = coor_shift_down(ws, output_cell)
 						while check_point['lastcol'] <= output_cell['lastcol']:
 
 							# TODO: add replace 'CHECK_S_INT' - Done
-							check_point_val = get_cell_value(ws, find_cell(ws, [check_point['firstcol'] , cur_row]))
+							check_point_val = get_cell_value(ws, [check_point['firstcol'] , cur_row])
 							if (check_point_val != None) and (check_point_val) != '-':
 
 								# Classify the check value
@@ -322,13 +340,13 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					if ('[f]' in get_cell_value(ws, outval_range)):
 						outval_cell = coor_shift_down(ws, outval_range)
 						while outval_cell['lastcol'] <= outval_range['lastcol']:
-							outval = get_cell_value(ws, find_cell(ws, [outval_cell['firstcol'], cur_row]))
+							outval = get_cell_value(ws, [outval_cell['firstcol'], cur_row])
 							if (outval != None) and (outval != '-'):
 								outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
 								+ outval + ';\n'
 							outval_cell = coor_shift_right(ws, outval_cell)
 
-				return_value = get_cell_value(ws, find_cell(ws, [input_cell['firstcol'], cur_row]))
+				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
 				if return_value != None and return_value != '-':
 					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
 				data = if_instance + check_data + outval_data + data_return
@@ -343,7 +361,6 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 			input_cell = coor_shift_right(ws, input_cell)
 	#dot_c.close()
-
 
 # Main function
 def main(argv):
@@ -368,15 +385,17 @@ def main(argv):
 			check_sequence = arg
 		elif opt in ("-ca", "--can_dir"):
 			src_dir = arg + '\\'
-
-	# Get working sheet
-	ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
-
-	# Create file dot h, contain all the test case
-	create_test_case_file(ws, worksheet, src_dir, source, check_sequence)
-
-	src_dir = src_dir + 'test_' + source + '\\'
-	create_stub_file(ws, worksheet, src_dir, source)
+	with tqdm(total=3) as pbar:
+		# Get working sheet
+		ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
+		pbar.update(1)
+		# Create file dot h, contain all the test case
+		create_test_case_file(ws, worksheet, src_dir, source, check_sequence)
+		pbar.update(1)
+		# Create stub function
+		src_dir = src_dir + 'test_' + source + '\\'
+		create_stub_file(ws, worksheet, src_dir, source)
+		pbar.update(1)
 
 if __name__ == "__main__":
 	main(sys.argv[1:])
