@@ -5,9 +5,14 @@ from shutil import copyfile
 # tqdm = 4.36.1
 from tqdm import tqdm
 
+gpbar = 0
+
 # Load worksheet
 def load_worksheet(filename, sheetname):
-	wb = load_workbook(filename, data_only=True)
+	try:
+		wb = load_workbook(filename, data_only=True)
+	except:
+		sys.exit(0)
 	ws = wb[sheetname]
 	return ws
 
@@ -175,7 +180,6 @@ def is_file_created(dir, file):
 
 # Create file .h contrain test case
 def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
-	check_sequence = bool(check_sequence)
 	# Get Test case start row and end row
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
 	# Get Input factor range
@@ -184,7 +188,10 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	output_element = find_cell(ws, 'Output element')
 	# Create file .h
 
+	global gpbar
 	dot_h = open(src_dir + 'test_' + src + '\\test_' + worksheet + '.h', 'w')
+	gpbar.write('Test case write to: ' + src_dir + 'test_' + src + '\\test_' + worksheet + '.h')
+
 	# Begin of file
 	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
 	dot_h.write(data)
@@ -226,12 +233,13 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 				# Check is this instance called
 				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
 				if (FRETVAL != None) and (FRETVAL != '-'):
-					FUNCINSTANCE = FNAME + '#' + tc_num + '_' + list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+					FUNCINSTANCE = FNAME + '#' + tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
 
 				if check_sequence == True:
 					data = data + FUNCINSTANCE + '; '
 				else:
 					data = data + '{' + FUNCINSTANCE + '} '
+			CELL = coor_shift_right(ws, CELL)
 		data = data + '"'
 
 		# Add execute - 1: execute this function
@@ -266,6 +274,8 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 
 #
 def create_stub_file(ws, worksheet, src_dir, src):
+	global gpbar
+	gpbar.write('Stub function\'s instance write to : ' + src_dir + 'test_' + src + '.c')
 	# Create stub function
 	#dot_c = open('test_' + worksheet + '.c', 'w')
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
@@ -276,7 +286,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 	for cur_row in range(start_row, end_row + 1):
 		# Get test case number
-		tc_num = get_cell_value(ws, [testcase_col, cur_row]))
+		tc_num = get_cell_value(ws, [testcase_col, cur_row])
 		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
 		# Create instance for test case num
 
@@ -285,8 +295,8 @@ def create_stub_file(ws, worksheet, src_dir, src):
 		while input_cell['lastcol'] <= input_factor['lastcol']:
 			# Check [rt]
 			cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-
-			if ('[rt]' in get_cell_value(ws, input_cell)):
+			CELL_VAL = get_cell_value(ws, input_cell)
+			if ('[rt]' in CELL_VAL):
 				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
 				del CELL_VAL
 				# Check loop of instance
@@ -303,7 +313,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
 				title = '/* Isolate for function %s */\n' %(FNAME)
 				# Set instance
-				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num + '_' + list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
+				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]))
 				outval_data = ''
 
 				# CHECK DATA input of stub function
@@ -342,20 +352,31 @@ def create_stub_file(ws, worksheet, src_dir, src):
 						while outval_cell['lastcol'] <= outval_range['lastcol']:
 							outval = get_cell_value(ws, [outval_cell['firstcol'], cur_row])
 							if (outval != None) and (outval != '-'):
-								outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
-								+ outval + ';\n'
+								if ('UTS' in outval):
+									outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
+									+ outval[:outval.find(')') + 1] + '&local' + ';\n'
+									pass
+								else:
+									outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
+									+ outval + ';\n'
 							outval_cell = coor_shift_right(ws, outval_cell)
 
+				# Set return value for Stub function
 				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				if return_value != None and return_value != '-':
-					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
+				if ('void' in get_cell_value(ws, outval_range)):
+					data_return = '\t\treturn;\n\t}\n'
+				else:
+					if return_value != None and return_value != '-':
+						data_return = '\t\treturn ' + return_value + ';\n\t}\n'
+
 				data = if_instance + check_data + outval_data + data_return
 
 				# Get position for append data to source
 				position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
 				# Write file to test program of Cantata
+				
 				file_write(src_dir, 'test_' + src + '.c', data, position)
-
+				
 				data = title + data
 				#dot_c.write(data)
 
@@ -382,10 +403,15 @@ def main(argv):
 		elif opt in ("-sr", "--source"):
 			source = arg
 		elif opt in ("-se", "--check_seq"):
-			check_sequence = arg
+			if ('rue' in arg):
+				check_sequence = True
+			else:
+				check_sequence = False
 		elif opt in ("-ca", "--can_dir"):
 			src_dir = arg + '\\'
 	with tqdm(total=3) as pbar:
+		global gpbar
+		gpbar = pbar
 		# Get working sheet
 		ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
 		pbar.update(1)
