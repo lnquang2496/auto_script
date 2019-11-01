@@ -156,13 +156,13 @@ def get_data(ws, target, input_range, cur_row):
 		if (target in get_cell_value(ws, input_cell)):
 			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
 				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				data = data + cur_input_param + ', '
+				data = data + str(cur_input_param) + ', '
 			else:
 				data = data + '{'
 				element_cell = coor_shift_down(ws, input_cell)
 				while element_cell['lastcol'] <= input_cell['lastcol']:
 					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
-					data = data + cur_input_param + ', '
+					data = data + str(cur_input_param) + ', '
 					element_cell = coor_shift_right(ws, element_cell)
 				data = data[:-2] + '}, '
 
@@ -207,7 +207,7 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 
 		# Add description to data - Named: Item
 		describe = find_cell(ws, 'Item')
-		data = data + '\"' + get_cell_value(ws, [describe['firstcol'], cur_row]) + '\"' + ', '
+		data = data + '\"' + str(get_cell_value(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
 		del describe
 
 		# Add expected calls sequence
@@ -240,7 +240,7 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 				else:
 					data = data + '{' + FUNCINSTANCE + '} '
 			CELL = coor_shift_right(ws, CELL)
-		data = data + '"'
+		data = data + '", '
 
 		# Add execute - 1: execute this function
 		data = data + '1' + ', '
@@ -326,20 +326,20 @@ def create_stub_file(ws, worksheet, src_dir, src):
 						while check_point['lastcol'] <= output_cell['lastcol']:
 
 							# TODO: add replace 'CHECK_S_INT' - Done
-							check_point_val = get_cell_value(ws, [check_point['firstcol'] , cur_row])
+							check_point_val = str(get_cell_value(ws, [check_point['firstcol'] , cur_row]))
 							if (check_point_val != None) and (check_point_val) != '-':
 
 								# Classify the check value
 								if ('UTS_NON0' in check_point_val):
-									check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + get_cell_value(ws, check_point) + ' != NULL)' + ', true);\n'
+									check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + str(get_cell_value(ws, check_point)) + ' != NULL)' + ', true);\n'
 								elif ('NULL' in check_point_val) or (check_point_val.isupper()):
-									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
 								elif (check_point_val.isdigit()):
-									check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+									check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + str(get_cell_value(ws, check_point) )+ ', ' + check_point_val + ');\n'
 								elif ('u' or 'U' in check_point_val):
-									check_data = check_data + '\t\t' + 'CHECK_U_INT' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+									check_data = check_data + '\t\t' + 'CHECK_U_INT' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
 								else:
-									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + get_cell_value(ws, check_point) + ', ' + check_point_val + ');\n'
+									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
 
 							check_point = coor_shift_right(ws, check_point)
 					output_cell = coor_shift_right(ws, output_cell)
@@ -350,24 +350,26 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					if ('[f]' in get_cell_value(ws, outval_range)):
 						outval_cell = coor_shift_down(ws, outval_range)
 						while outval_cell['lastcol'] <= outval_range['lastcol']:
-							outval = get_cell_value(ws, [outval_cell['firstcol'], cur_row])
+							outval = str(get_cell_value(ws, [outval_cell['firstcol'], cur_row]))
 							if (outval != None) and (outval != '-'):
 								if ('UTS' in outval):
-									outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
+									outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' \
 									+ outval[:outval.find(')') + 1] + '&local' + ';\n'
 									pass
 								else:
-									outval_data = outval_data + '\t\t' + '*' + get_cell_value(ws, outval_cell) + ' = ' \
+									outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' \
 									+ outval + ';\n'
 							outval_cell = coor_shift_right(ws, outval_cell)
 
 				# Set return value for Stub function
 				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+				'''
 				if ('void' in get_cell_value(ws, outval_range)):
 					data_return = '\t\treturn;\n\t}\n'
 				else:
-					if return_value != None and return_value != '-':
-						data_return = '\t\treturn ' + return_value + ';\n\t}\n'
+				'''
+				if return_value != None and return_value != '-':
+					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
 
 				data = if_instance + check_data + outval_data + data_return
 
