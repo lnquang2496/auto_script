@@ -206,8 +206,10 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		data = data + '\"' + tc_num + '\"' + ', '
 
 		# Add description to data - Named: Item
-		describe = find_cell(ws, 'Item')
-		data = data + '\"' + str(get_cell_value(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
+		#describe = find_cell(ws, 'Item')
+		describe = str(worksheet) + '_' + str(tc_num)
+		#data = data + '\"' + str(get_cell_value(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
+		data = data + '\"' + describe + '\"' + ', '
 		del describe
 
 		# Add expected calls sequence
@@ -234,7 +236,8 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
 				if (FRETVAL != None) and (FRETVAL != '-'):
 					FUNCINSTANCE = FNAME + '#' + tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
-
+				else:
+					FUNCINSTANCE = ''
 				if check_sequence == True:
 					data = data + FUNCINSTANCE + '; '
 				else:
@@ -330,9 +333,9 @@ def create_stub_file(ws, worksheet, src_dir, src):
 							if (check_point_val != None) and (check_point_val) != '-':
 
 								# Classify the check value
-								if ('UTS_NON0' in check_point_val):
+								if ('UTS_NON0' in check_point_val) or ('false' in check_point_val) or ('true' in check_point_val): 
 									check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + str(get_cell_value(ws, check_point)) + ' != NULL)' + ', true);\n'
-								elif ('NULL' in check_point_val) or (check_point_val.isupper()):
+								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val):
 									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
 								elif (check_point_val.isdigit()):
 									check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + str(get_cell_value(ws, check_point) )+ ', ' + check_point_val + ');\n'
@@ -370,6 +373,8 @@ def create_stub_file(ws, worksheet, src_dir, src):
 				'''
 				if return_value != None and return_value != '-':
 					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
+				else:
+					data_return = '\t\treturn;\n\t}\n'
 
 				data = if_instance + check_data + outval_data + data_return
 
