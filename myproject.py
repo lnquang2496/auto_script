@@ -41,7 +41,7 @@ def find_cell(ws, target, match_case=False, find_all=False):
 							if find_all:
 								return_value.append(temp)
 							else:
-								return temp
+								return dict(temp)
 					if not_merged_cell:
 						temp = {'firstcol':cell.column,
 								'firstrow':cell.row,
@@ -50,7 +50,7 @@ def find_cell(ws, target, match_case=False, find_all=False):
 						if find_all:
 							return_value.append(temp)
 						else:
-							return temp
+							return dict(temp)
 	# If target is list type, list format [column, row]
 	elif isinstance(target, list):
 		# list  = [col, row]
@@ -77,14 +77,13 @@ def find_cell(ws, target, match_case=False, find_all=False):
 def get_cell_value(ws, coor):
 	if isinstance(coor, list):
 		val = ws.cell(column=coor[0], row=coor[1]).value
-		return val
+		return str(val)
 	else:
 		for row in range (coor['firstrow'], coor['lastrow'] + 1):
 			for col in range (coor['firstcol'], coor['lastcol'] + 1):
 				val = ws.cell(column=col, row=row).value
 				if (val != None):
-					return val
-		#print("Coordinate \'%s\': is blank" %(coor))
+					return str(val)
 	return None
 
 # Shift 'right' cell
@@ -127,7 +126,11 @@ def row_of_testcase(ws, symbol):
 def file_write(path, filename, data, position):
 	write_done = False
 	count = 0
-	os.rename(path + filename, path + 'temp.txt')
+	try:
+		os.rename(path + filename, path + 'temp.txt')
+	except:
+		sys.exit(0)
+
 	infile = open(path + 'temp.txt', 'r')
 	outfile = open(path + filename, 'w')
 	for line in infile:
@@ -275,12 +278,13 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	dot_h.close()
 	del dot_h
 
-#
+# Create stub instance
 def create_stub_file(ws, worksheet, src_dir, src):
 	global gpbar
 	gpbar.write('Stub function\'s instance write to : ' + src_dir + 'test_' + src + '.c')
 	# Create stub function
 	#dot_c = open('test_' + worksheet + '.c', 'w')
+	# Get the first test case's row, and the last test case's row, and the current col
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
 	# Get Input factor range
 	input_factor = find_cell(ws, 'Input factor')
@@ -297,7 +301,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 		input_cell = coor_shift_down(ws, input_factor)
 		while input_cell['lastcol'] <= input_factor['lastcol']:
 			# Check [rt]
-			cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+			#cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
 			CELL_VAL = get_cell_value(ws, input_cell)
 			if ('[rt]' in CELL_VAL):
 				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
@@ -309,10 +313,15 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
 					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
 
+				void_return_type = False
+
 				# Get function name
 				FNAME = get_cell_value(ws, input_cell)
 				# Extract function name from [rt]type function_name(...);
 				FNAME = FNAME[FNAME.find(' ') + 1: FNAME.find('(')]
+				if 'void' in FNAME:
+					void_return_type = True
+
 				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
 				title = '/* Isolate for function %s */\n' %(FNAME)
 				# Set instance
@@ -346,7 +355,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 							check_point = coor_shift_right(ws, check_point)
 					output_cell = coor_shift_right(ws, output_cell)
-
+				
 				# Function output value
 				if input_cell['lastcol'] < input_factor['lastcol']:
 					outval_range = coor_shift_right(ws, input_cell)
@@ -366,26 +375,30 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 				# Set return value for Stub function
 				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				'''
-				if ('void' in get_cell_value(ws, outval_range)):
+				
+				instance_existed = True
+
+				if void_return_type == True:
 					data_return = '\t\treturn;\n\t}\n'
 				else:
-				'''
-				if return_value != None and return_value != '-':
-					data_return = '\t\treturn ' + return_value + ';\n\t}\n'
-				else:
-					data_return = '\t\treturn;\n\t}\n'
+					if return_value != None and return_value != '-':
+						data_return = '\t\treturn ' + str(return_value) + ';\n\t}\n'
+					else:
+						# This instance is not used
+						instance_existed = False
+						#data_return = '\t\treturn ' + '0' + ';\n\t}\n'
+						
+				if instance_existed:
+					data = if_instance + check_data + outval_data + data_return
 
-				data = if_instance + check_data + outval_data + data_return
-
-				# Get position for append data to source
-				position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
-				# Write file to test program of Cantata
-				
-				file_write(src_dir, 'test_' + src + '.c', data, position)
-				
-				data = title + data
-				#dot_c.write(data)
+					# Get position for append data to source
+					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
+					# Write file to test program of Cantata
+					
+					file_write(src_dir, 'test_' + src + '.c', data, position)
+					
+					data = title + data
+					#dot_c.write(data)
 
 			input_cell = coor_shift_right(ws, input_cell)
 	#dot_c.close()
