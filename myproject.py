@@ -15,7 +15,7 @@ def load_worksheet(filename, sheetname):
 		sys.exit(0)
 	ws = wb[sheetname]
 	return ws
-
+8
 # Find cell boundary
 def find_cell(ws, target, match_case=False, find_all=False):
 	return_value = list()
@@ -63,13 +63,13 @@ def find_cell(ws, target, match_case=False, find_all=False):
 						'lastcol':merged_cell.bounds[2],
 						'lastrow':merged_cell.bounds[3]}
 				not_merged_cell = False
-				return temp
+				return dict(temp)
 		if not_merged_cell:
 			temp = {'firstcol':target[0],
 					'firstrow':target[1],
 					'lastcol':target[0],
 					'lastrow':target[1]}
-			return temp
+			return dict(temp)
 
 	return return_value
 
@@ -126,13 +126,20 @@ def row_of_testcase(ws, symbol):
 def file_write(path, filename, data, position):
 	write_done = False
 	count = 0
+	path_temp = '{}temp.txt'.format(path)
+	path_file = '{}{}'.format(path, filename)
+
 	try:
-		os.rename(path + filename, path + 'temp.txt')
+		#os.rename(path + filename, path + 'temp.txt')
+		os.rename(path_file, path_temp)
 	except:
 		sys.exit(0)
 
-	infile = open(path + 'temp.txt', 'r')
-	outfile = open(path + filename, 'w')
+	#infile = open(path + 'temp.txt', 'r')
+	infile = open(path_temp, 'r')
+	#outfile = open(path + filename, 'w')
+	outfile = open(path_file, 'w')
+
 	for line in infile:
 
 		try:
@@ -148,38 +155,34 @@ def file_write(path, filename, data, position):
 		outfile.write(line)
 	infile.close()
 	outfile.close()
-	os.remove(path + 'temp.txt')
+	#os.remove(path + 'temp.txt')
+	os.remove(path_temp)
 
 # Extract data from PCL with specific target
 def get_data(ws, target, input_range, cur_row):
 	data = ''
 	input_cell = coor_shift_down(ws, input_range)
 	while input_cell['lastcol'] <= input_range['lastcol']:
-		# Check input cell merged rang, if merge range use {var1, var2}
+		# Check input cell merged range, if merge range use {var1, var2}
 		if (target in get_cell_value(ws, input_cell)):
 			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
 				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				data = data + str(cur_input_param) + ', '
+				#data = data + str(cur_input_param) + ', '
+				data = '{}{}, '.format(data, cur_input_param)
 			else:
-				data = data + '{'
+				#data = data + '{'
+				data = '{}{{'.format(data)
 				element_cell = coor_shift_down(ws, input_cell)
 				while element_cell['lastcol'] <= input_cell['lastcol']:
 					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
-					data = data + str(cur_input_param) + ', '
+					#data = data + str(cur_input_param) + ', '
+					data = '{}{}, '.format(data, cur_input_param)
 					element_cell = coor_shift_right(ws, element_cell)
-				data = data[:-2] + '}, '
+				#data = data[:-2] + '}, '
+				data = '{}}}, '.format(data[:-2])
 
 		input_cell = coor_shift_right(ws, input_cell)
 	return data
-
-# Check if file is created or not, and use attribute to open file
-def is_file_created(dir, file):
-	check_dir = ".\\" + str(file)
-	if (os.path.isfile(check_dir)):
-		f = open('%s' % file, 'a')
-	else:
-		f = open('%s' % file, 'w')
-	return f
 
 # Create file .h contrain test case
 def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
@@ -192,8 +195,11 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	# Create file .h
 
 	global gpbar
-	dot_h = open(src_dir + 'test_' + src + '\\test_' + worksheet + '.h', 'w')
-	gpbar.write('Test case write to: ' + src_dir + 'test_' + src + '\\test_' + worksheet + '.h')
+	dot_h_dir = '{}test_{}\\test_{}.h'.format(src_dir, src, worksheet)
+	#dot_h = open(src_dir + 'test_' + src + '\\test_' + worksheet + '.h', 'w')
+	dot_h = open(dot_h_dir, 'w')
+	#gpbar.write('Test case write to: ' + src_dir + 'test_' + src + '\\test_' + worksheet + '.h')
+	gpbar.write('Test case write to: {}'.format(dot_h_dir))
 
 	# Begin of file
 	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
@@ -206,13 +212,15 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# Add test case number to data
 		tc_num = get_cell_value(ws, [testcase_col, cur_row])
 		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
-		data = data + '\"' + tc_num + '\"' + ', '
-
+		#data = data + '\"' + tc_num + '\"' + ', '
+		data = '{}\"{}\", '.format(data, tc_num)
 		# Add description to data - Named: Item
 		#describe = find_cell(ws, 'Item')
-		describe = str(worksheet) + '_' + str(tc_num)
+		#describe = str(worksheet) + '_' + str(tc_num)
+		describe = '{}_{}'.format(worksheet, tc_num)
 		#data = data + '\"' + str(get_cell_value(ws, [describe['firstcol'], cur_row])) + '\"' + ', '
-		data = data + '\"' + describe + '\"' + ', '
+		#data = data + '\"' + describe + '\"' + ', '
+		data = '{}\"{}\", '.format(data, describe)
 		del describe
 
 		# Add expected calls sequence
@@ -237,19 +245,25 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
 				# Check is this instance called
 				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
+
+				FUNCINSTANCE = ''
 				if (FRETVAL != None) and (FRETVAL != '-'):
-					FUNCINSTANCE = FNAME + '#' + tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
-				else:
-					FUNCINSTANCE = ''
+					#FUNCINSTANCE = FNAME + '#' + tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
+					FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
+				
 				if check_sequence == True:
-					data = data + FUNCINSTANCE + '; '
+					#data = data + FUNCINSTANCE + '; '
+					data = '{}{}; '.format(data, FUNCINSTANCE)
 				else:
-					data = data + '{' + FUNCINSTANCE + '} '
+					#data = data + '{' + FUNCINSTANCE + '} '
+					data = '{}{{{}}} '.format(data, FUNCINSTANCE)
 			CELL = coor_shift_right(ws, CELL)
-		data = data + '", '
+		#data = data + '", '
+		data = '{}\", '.format(data)
 
 		# Add execute - 1: execute this function
-		data = data + '1' + ', '
+		#data = data + '1' + ', '
+		data = '{}1, '.format(data)
 
 		# Add input param by detect [a]
 		# TODO: Add detect structure - DONE
@@ -269,7 +283,8 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		data = data + get_data(ws, 'Return value', output_element, cur_row)
 
 		# Write all the data to file
-		data = data[:-2] + '},\n'
+		#data = data[:-2] + '},\n'
+		data = '{}}},\n'.format(data[:-2])
 		dot_h.write(data)
 
 	# End of file
