@@ -15,7 +15,7 @@ def load_worksheet(filename, sheetname):
 		sys.exit(0)
 	ws = wb[sheetname]
 	return ws
-8
+
 # Find cell boundary
 def find_cell(ws, target, match_case=False, find_all=False):
 	return_value = list()
@@ -202,7 +202,9 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	gpbar.write('Test case write to: {}'.format(dot_h_dir))
 
 	# Begin of file
-	data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	#data = 'struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	data = 'static struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	
 	dot_h.write(data)
 	# Add test case
 	# Input factor
@@ -227,7 +229,8 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# In case not check sequence of calling stub function
 		# TODO: Add feature: many instance in sequence
 
-		data = data + '"'
+		#data = data + '"'
+		data = '{}"'.format(data)
 		CELL = coor_shift_down(ws, input_factor)
 		list_of_function_called = list()
 		while CELL['lastcol'] <= input_factor['lastcol']:
@@ -250,20 +253,25 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 				if (FRETVAL != None) and (FRETVAL != '-'):
 					#FUNCINSTANCE = FNAME + '#' + tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
 					FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
-				
-				if check_sequence == True:
-					#data = data + FUNCINSTANCE + '; '
-					data = '{}{}; '.format(data, FUNCINSTANCE)
-				else:
-					#data = data + '{' + FUNCINSTANCE + '} '
-					data = '{}{{{}}} '.format(data, FUNCINSTANCE)
+
+					if check_sequence == True:
+						#data = data + FUNCINSTANCE + '; '
+						data = '{}{}; '.format(data, FUNCINSTANCE)
+					else:
+						#data = data + '{' + FUNCINSTANCE + '} '
+						data = '{}{{{}}} '.format(data, FUNCINSTANCE)
+
 			CELL = coor_shift_right(ws, CELL)
 		#data = data + '", '
 		data = '{}\", '.format(data)
 
 		# Add execute - 1: execute this function
 		#data = data + '1' + ', '
-		data = '{}1, '.format(data)
+		judgment = find_cell(ws, 'Judgment')
+		if ('Exclude' in get_cell_value(ws, [judgment['firstcol'], cur_row])):
+			data = '{}0, '.format(data)
+		else:
+			data = '{}1, '.format(data)
 
 		# Add input param by detect [a]
 		# TODO: Add detect structure - DONE
@@ -358,19 +366,24 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 								# Classify the check value
 								if ('UTS_NON0' in check_point_val) or ('false' in check_point_val) or ('true' in check_point_val): 
-									check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + str(get_cell_value(ws, check_point)) + ' != NULL)' + ', true);\n'
+									#check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + str(get_cell_value(ws, check_point)) + ' != NULL)' + ', true);\n'
+									check_data = '{}\t\tCHECK_BOOLEAN(({} != NULL), true);\n'.format(check_data, get_cell_value(ws, check_point))
 								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val):
-									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									#check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
 								elif (check_point_val.isdigit()):
-									check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + str(get_cell_value(ws, check_point) )+ ', ' + check_point_val + ');\n'
+									#check_data = check_data + '\t\t' + 'CHECK_S_INT' + '(' + str(get_cell_value(ws, check_point) )+ ', ' + check_point_val + ');\n'
+									check_data = '{}\t\tCHECK_S_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
 								elif ('u' or 'U' in check_point_val):
-									check_data = check_data + '\t\t' + 'CHECK_U_INT' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									#check_data = check_data + '\t\t' + 'CHECK_U_INT' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									check_data = '{}\t\tCHECK_U_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
 								else:
-									check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									#check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
+									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
 
 							check_point = coor_shift_right(ws, check_point)
 					output_cell = coor_shift_right(ws, output_cell)
-				
+
 				# Function output value
 				if input_cell['lastcol'] < input_factor['lastcol']:
 					outval_range = coor_shift_right(ws, input_cell)
@@ -380,38 +393,47 @@ def create_stub_file(ws, worksheet, src_dir, src):
 							outval = str(get_cell_value(ws, [outval_cell['firstcol'], cur_row]))
 							if (outval != None) and (outval != '-'):
 								if ('UTS' in outval):
-									outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' \
-									+ outval[:outval.find(')') + 1] + '&local' + ';\n'
-									pass
+									return_val = get_cell_value(ws, outval_cell)
+									#outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' \
+									#+ outval[:outval.find(')') + 1] + '&local' + ';\n'
+									if '*' in return_val:
+										outval_data = '{}\t\t{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
+									else:
+										outval_data = '{}\t\t*{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
 								else:
-									outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' \
-									+ outval + ';\n'
+									#outval_data = outval_data + '\t\t' + '*' + str(get_cell_value(ws, outval_cell)) + ' = ' + outval + ';\n'
+									return_val = get_cell_value(ws, outval_cell)
+									if '*' in return_val:
+										outval_data = '{}\t\t{} = {};\n'.format(outval_data, return_val, outval)
+									else:
+										outval_data = '{}\t\t*{} = {};\n'.format(outval_data, return_val, outval)
 							outval_cell = coor_shift_right(ws, outval_cell)
 
 				# Set return value for Stub function
 				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				
+
 				instance_existed = True
 
 				if void_return_type == True:
 					data_return = '\t\treturn;\n\t}\n'
 				else:
 					if return_value != None and return_value != '-':
-						data_return = '\t\treturn ' + str(return_value) + ';\n\t}\n'
+						#data_return = '\t\treturn ' + str(return_value) + ';\n\t}\n'
+						data_return = '\t\treturn {};\n\t}}\n'.format(return_value)
 					else:
 						# This instance is not used
 						instance_existed = False
 						#data_return = '\t\treturn ' + '0' + ';\n\t}\n'
-						
+
 				if instance_existed:
 					data = if_instance + check_data + outval_data + data_return
 
 					# Get position for append data to source
 					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
 					# Write file to test program of Cantata
-					
-					file_write(src_dir, 'test_' + src + '.c', data, position)
-					
+					#file_write(src_dir, 'test_' + src + '.c', data, position)
+					file_write(src_dir, 'test_{}.c'.format(src) , data, position)
+
 					data = title + data
 					#dot_c.write(data)
 
@@ -448,13 +470,15 @@ def main(argv):
 		global gpbar
 		gpbar = pbar
 		# Get working sheet
-		ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
+		#ws = load_worksheet(inputdir + '\\' + inputfile, worksheet)
+		ws = load_worksheet('{}\\{}'.format(inputdir, inputfile), worksheet)
 		pbar.update(1)
 		# Create file dot h, contain all the test case
 		create_test_case_file(ws, worksheet, src_dir, source, check_sequence)
 		pbar.update(1)
 		# Create stub function
-		src_dir = src_dir + 'test_' + source + '\\'
+		#src_dir = src_dir + 'test_' + source + '\\'
+		src_dir = '{}test_{}\\'.format(src_dir, source)
 		create_stub_file(ws, worksheet, src_dir, source)
 		pbar.update(1)
 
