@@ -340,10 +340,12 @@ def create_stub_file(ws, worksheet, src_dir, src):
 
 				# Get function name
 				FNAME = get_cell_value(ws, input_cell)
+
+				if 'void' in FNAME[:FNAME.find('(')]:
+					void_return_type = True
+
 				# Extract function name from [rt]type function_name(...);
 				FNAME = FNAME[FNAME.find(' ') + 1: FNAME.find('(')]
-				if 'void' in FNAME:
-					void_return_type = True
 
 				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
 				title = '/* Isolate for function %s */\n' %(FNAME)
@@ -368,7 +370,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 								if ('UTS_NON0' in check_point_val) or ('false' in check_point_val) or ('true' in check_point_val): 
 									#check_data = check_data + '\t\t' + 'CHECK_BOOLEAN' + '((' + str(get_cell_value(ws, check_point)) + ' != NULL)' + ', true);\n'
 									check_data = '{}\t\tCHECK_BOOLEAN(({} != NULL), true);\n'.format(check_data, get_cell_value(ws, check_point))
-								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val):
+								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val) or ('Connection' in check_point_val):
 									#check_data = check_data + '\t\t' + 'CHECK_ADDRESS' + '(' + str(get_cell_value(ws, check_point)) + ', ' + check_point_val + ');\n'
 									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
 								elif (check_point_val.isdigit()):
