@@ -128,34 +128,21 @@ def file_write(path, filename, data, position):
 	count = 0
 	path_temp = '{}temp.txt'.format(path)
 	path_file = '{}{}'.format(path, filename)
-
 	try:
-		#os.rename(path + filename, path + 'temp.txt')
 		os.rename(path_file, path_temp)
 	except:
 		sys.exit(0)
-
-	#infile = open(path + 'temp.txt', 'r')
-	infile = open(path_temp, 'r')
-	#outfile = open(path + filename, 'w')
-	outfile = open(path_file, 'w')
-
-	for line in infile:
-
-		try:
-			if (position[count] in line):
-				count += 1
-		except:
-			pass
-
-		if (count == len(position)) and (write_done == False):
-			outfile.write(data)
-			write_done = True
-
-		outfile.write(line)
-	infile.close()
-	outfile.close()
-	#os.remove(path + 'temp.txt')
+	with open(path_temp, 'r') as infile, open(path_file, 'w') as outfile:
+		for line in infile:
+			try:
+				if (position[count] in line):
+					count += 1
+			except:
+				pass
+			if (count == len(position)) and (write_done == False):
+				outfile.write(data)
+				write_done = True
+			outfile.write(line)
 	os.remove(path_temp)
 
 # Extract data from PCL with specific target
