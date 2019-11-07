@@ -133,7 +133,7 @@ def main(argv):
 
 	ws = load_worksheet('{}\\{}'.format(inputdir, inputfile), worksheet)
 
-	input_param = ''
+	input_define = ''
 	pointer_init = ''
 	pointer_init_local = ''
 
@@ -173,10 +173,10 @@ def main(argv):
 					pass
 
 				CELL_VAL = CELL_VAL[CELL_VAL.find(']') + 1 : ]
-				if CELL_VAL in input_param:
+				if CELL_VAL in input_define:
 					pass
 				else:
-					input_param = '{}\t\t{};\n'.format(input_param, CELL_VAL)
+					input_define = '{}\t\t{};\n'.format(input_define, CELL_VAL)
 
 			else:
 				struct_element = coor_shift_down(ws, CELL)
@@ -184,7 +184,7 @@ def main(argv):
 					struct_element_cell = get_cell_value(ws, struct_element)
 					
 
-					input_param = '{}\t\t{};\n'.format(input_param, struct_element_cell)
+					input_define = '{}\t\t{};\n'.format(input_define, struct_element_cell)
 
 					struct_name = get_cell_value(ws, CELL)
 					struct_name = struct_name[struct_name.find('*') + 1 : ].replace(' ', '')
@@ -229,7 +229,7 @@ def main(argv):
 		char* name;
 		char* description;
 		char* expected_calls;
-{input_param}
+{input_define}
 		int32_t expected_returnValue;
 	}};
 	int32_t returnValue;
@@ -257,7 +257,7 @@ def main(argv):
 	END_TEST_LOOP();
 }}
 
-'''.format(func_name=worksheet, input_param=input_param, pointer_init=pointer_init, pointer_check=pointer_check, pointer_init_local=pointer_init_local)
+'''.format(func_name=worksheet, input_define=input_define, pointer_init=pointer_init, pointer_check=pointer_check, pointer_init_local=pointer_init_local)
 	with open('temp.c', 'w') as f:
 		f.write(data)
 
