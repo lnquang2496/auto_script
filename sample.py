@@ -192,3 +192,81 @@ for p in pcl_to_testprogram(ws):
 	print(p)
 print("----DONE----")
 '''
+def get_input_argument(ws, top_cell_name:str, target:str)->str:
+	valid_top_cell_name = ['Input factor', 'Output element']
+	valid_target = ['[a]', '[f]', '[rt]', '[g]']
+	if (target not in valid_target) or (top_cell_name not in valid_top_cell_name):
+		return
+	del valid_top_cell_name, valid_target
+
+	cell_1 = coor_find_cell(ws, top_cell_name)
+	cell_2 = coor_shift_down(ws, cell_1)
+	data = ''
+	list_of_handle = []
+	while (cell_2['lastcol'] <= cell_1['lastcol']):
+		### Begin of while
+		cell_2_val = get_cell_value(ws, cell_2)
+		if target in cell_2_val:
+			cell_2_type, cell_2_name = get_type_name(ws, cell_2_val)
+			is_cell_2_pointer = check_pointer(ws, cell_2_val)
+			is_cell_2_structure = check_structure(ws, cell_2_val)
+			if cell_2_name in list_of_handle:
+				pass
+			else:
+				list_of_handle.append(cell_2_name)
+				data_append = 'CURRENT_TEST.{},'.format(cell_2_name)
+				data = '{}{}'.format(data, data_append)
+
+		###	Next of while
+		cell_2 = coor_shift_right(ws, cell_2)
+	return data[:-1]
+	pass
+
+def test_part(ws, func_name:str)->str:
+	data_1, data_2, data_3, data_4 = pcl_to_testprogram(ws)
+	input_argument = get_input_argument(ws, 'Input factor', '[a]')
+	data = '''\
+void test_{func_name}(){{
+	struct CPPTH_LOOP_INPUT_STRUCT {{
+		/* Test case data declarations */
+		char* name;
+		char* description;
+		char* expected_calls;
+		int execute;
+{data_1}
+		int32_t expected_returnValue;
+	}};
+	int32_t returnValue;
+	/* Import external data declarations */
+	#include "test_{func_name}.h"
+
+	/* Set global data */
+	initialise_global_data();
+	/* Set expected values for global data checks */
+	initialise_expected_global_data();
+
+{data_2}
+
+	START_TEST_LOOP();
+		/* Expected Call Sequence  */
+		EXPECTED_CALLS(CURRENT_TEST.expected_calls);
+{data_3}
+			/* Call SUT */
+			returnValue = {func_name}({input_argument});
+
+			/* Test case checks */
+			CHECK_S_INT(returnValue, CURRENT_TEST.expected_returnValue);
+{data_4}
+		END_CALLS();
+	END_TEST_LOOP();
+}}
+'''.format(\
+	func_name = func_name,\
+	data_1 = data_1,\
+	data_2 = data_2,\
+	data_3 = data_3,\
+	data_4 = data_4,\
+	input_argument = input_argument\
+	)
+	print(data)
+	return data
