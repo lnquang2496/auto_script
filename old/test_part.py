@@ -330,6 +330,7 @@ void test_{func_name}(){{
 		char* name;
 		char* description;
 		char* expected_calls;
+		int execute;
 {input_define}
 		int32_t expected_returnValue;
 	}};
@@ -369,5 +370,5 @@ void test_{func_name}(){{
 		f.write(data)
 #------------------------------------------------------------------------------#
 # Testing function
-ws = load_worksheet('test.xlsx', 'Sheet1')
-test_program_format(ws, 'r_imr_osal_init')
+#ws = load_worksheet('test.xlsx', 'Sheet1')
+#test_program_format(ws, 'r_imr_osal_init')

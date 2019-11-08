@@ -19,12 +19,13 @@ REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_drvknl_read_reg --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_drvknl_write_reg --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 
-REM call set PCL_NAME=IMR_INT_V3H_B_V1_unit_test_specification_imr_State.xlsx
-REM call set TP_DIR=UTP_IMR_State
-REM call set CANTATA_DIR=C:\Users\quangla\workspace\%TP_DIR%\Cantata\tests
+call set PCL_NAME=IMR_INT_V3H_B_V1_unit_test_specification_imr_State.xlsx
+call set TP_DIR=UTP_IMR_State_Management
+call set CANTATA_DIR=C:\Users\quangla\workspace\%TP_DIR%\Cantata\tests
 
-REM call set SRC_NAME=r_imr_state_mng
-REM call python reset_stub_instance.py --can_dir %CANTATA_DIR% --source %SRC_NAME%
+call set SRC_NAME=r_imr_state_mng
+call python reset_stub_instance.py --can_dir %CANTATA_DIR% --source %SRC_NAME%
+call python combine.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_imr_set --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_imr_set --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_imr_get --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_imr_lock --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
@@ -38,13 +39,13 @@ REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_rtt_unlock --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_state_rtt_get_channel --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 
-call set PCL_NAME=IMR_INT_V3H_B_V1_unit_test_specification_imr_OSAL.xlsx
-call set TP_DIR=UTP_IMR_OSAL
-call set CANTATA_DIR=C:\Users\quangla\workspace\%TP_DIR%\Cantata\tests
+REM call set PCL_NAME=IMR_INT_V3H_B_V1_unit_test_specification_imr_OSAL.xlsx
+REM call set TP_DIR=UTP_IMR_OSAL
+REM call set CANTATA_DIR=C:\Users\quangla\workspace\%TP_DIR%\Cantata\tests
 
-call set SRC_NAME=r_imr_osal_ctl
+REM call set SRC_NAME=r_imr_osal_ctl
 REM call python fixed_part.py --can_dir %CANTATA_DIR% --source %SRC_NAME%
-call python test.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_sem_lock --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
+REM call python test.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_sem_lock --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python reset_stub_instance.py --can_dir %CANTATA_DIR% --source %SRC_NAME%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_ctl_init --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
 REM call python myproject.py --idir %PCL_PATH% --ifile %PCL_NAME% --wsheet r_imr_osal_ctl_deinit --source %SRC_NAME% --check_seq True --can_dir %CANTATA_DIR%
