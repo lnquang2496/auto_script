@@ -1,5 +1,7 @@
-import os, sys, getopt
 from openpyxl import load_workbook
+from os       import rename, remove
+from sys      import exit
+from os.path  import isfile, join
 
 def coor_find_cell(ws, target, match_case:bool=False, find_all:bool=False):
 	return_value = list()
@@ -147,3 +149,610 @@ def select_check_type(ws, value:str)->str:
 			check_type = 'CHECK_ADDRESS'
 	return check_type
 
+def file_append(f_path:str, f_name:str, data:str, position, append_type:bool = False):
+	file_targ = join(f_path, f_name)
+	file_temp = join(f_path, "{}_temp.txt".format(f_name))
+	file_old  = join(f_path, "{}_old.txt".format(f_name))
+	pos_count = 0
+
+	def append_data(line:str, data:str):
+		return "{}{}".format(data, line) if append_type else "{}{}".format(line, data)
+
+	if not isfile(file_targ):
+		exit("File \"{}\" not exist".format(file_targ))
+
+	if isfile(file_temp):
+		remove(file_temp)
+
+	with open(file_targ, "r") as i, open(file_temp, "w") as o:
+		for index, l in enumerate(i):
+			if isinstance(position, int):
+				if position == index:
+					l = append_data(l, data)
+
+			elif isinstance(position, str):
+				if position in l:
+					l = append_data(l, data)
+
+			elif isinstance(position, list):
+				if pos_count < len(position):
+					if position[pos_count] in l:
+						pos_count += 1
+					if pos_count == len(position):
+						l = append_data(l, data)
+
+			o.write(l)
+
+	if isfile(file_old):
+		remove(file_old)
+
+	rename(file_targ, file_old)
+	rename(file_temp, file_targ)
+
+def file_clear(f_path:str, f_name:str, start_pos, end_pos):
+	file_targ = join(f_path, f_name)
+	file_temp = join(f_path, "{}_temp.txt".format(f_name))
+	file_old  = join(f_path, "{}_old.txt".format(f_name))
+	start_pos_count = 0
+	end_pos_count = 0
+	flag_clear = False
+
+	if not isfile(file_targ):
+		exit("File \"{}\" not exist".format(file_targ))
+
+	if isfile(file_temp):
+		remove(file_temp)
+
+	with open(file_targ, "r") as i, open(file_temp, "w") as o:
+		for index, l in enumerate(i, 1):
+			if isinstance(start_pos, int) and isinstance(end_pos, int):
+				if (start_pos < index) and (end_pos > index):
+					l = ""
+
+			elif isinstance(start_pos, str) and isinstance(end_pos, str):
+				if start_pos in l:
+					flag_clear = True
+					o.write(l)
+				if end_pos in l:
+					flag_clear = False
+
+			elif isinstance(start_pos, list) and isinstance(end_pos, list):
+				if start_pos_count < len(start_pos):
+					if start_pos[start_pos_count] in l:
+						start_pos_count += 1
+					if start_pos_count == len(start_pos):
+						flag_clear = True
+						o.write(l)
+
+				if end_pos_count < len(end_pos):
+					if end_pos[end_pos_count] in l:
+						end_pos_count += 1
+					if end_pos_count == len(end_pos):
+						flag_clear = False
+			
+			if flag_clear:
+				l = ""
+
+			o.write(l)
+
+	if isfile(file_old):
+		remove(file_old)
+
+	rename(file_targ, file_old)
+	rename(file_temp, file_targ)
+
+# Extract data from PCL with specific target
+def get_data(ws, target, input_range, cur_row):
+	data = ''
+	input_cell = coor_shift_down(ws, input_range)
+	while input_cell['lastcol'] <= input_range['lastcol']:
+		# Check input cell merged range, if merge range use {var1, var2}
+		if (target in get_cell_value(ws, input_cell)):
+			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
+				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+				#data = data + str(cur_input_param) + ', '
+				data = '{}{}, '.format(data, cur_input_param)
+			else:
+				#data = data + '{'
+				data = '{}{{'.format(data)
+				element_cell = coor_shift_down(ws, input_cell)
+				while element_cell['lastcol'] <= input_cell['lastcol']:
+					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
+					#data = data + str(cur_input_param) + ', '
+					data = '{}{}, '.format(data, cur_input_param)
+					element_cell = coor_shift_right(ws, element_cell)
+				#data = data[:-2] + '}, '
+				data = '{}}}, '.format(data[:-2])
+
+		input_cell = coor_shift_right(ws, input_cell)
+	return data
+
+# Create file .h contrain test case
+def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
+	# Get Test case start row and end row
+	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+	# Get Input factor range
+	input_factor = find_cell(ws, 'Input factor')
+	# Get Output element range
+	output_element = find_cell(ws, 'Output element')
+	# Create file .h
+
+	dot_h_dir = '{}test_{}\\test_{}.h'.format(src_dir, src, worksheet)
+	dot_h = open(dot_h_dir, 'w')
+
+	# Begin of file
+	data = 'static struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
+	
+	dot_h.write(data)
+	# Add test case
+	# Input factor
+	for cur_row in range(start_row, end_row + 1):
+		# Reset data
+		data = '\t{'
+		# Add test case number to data
+		tc_num = get_cell_value(ws, [testcase_col, cur_row])
+		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
+		data = '{}\"{}\", '.format(data, tc_num)
+		# Add description to data - Named: Item
+		describe = '{}_{}'.format(worksheet, tc_num)
+		data = '{}\"{}\", '.format(data, describe)
+		del describe
+
+		# Add expected calls sequence
+		# In case not check sequence of calling stub function
+		# TODO: Add feature: many instance in sequence
+
+		data = '{}"'.format(data)
+		CELL = coor_shift_down(ws, input_factor)
+		list_of_function_called = list()
+		while CELL['lastcol'] <= input_factor['lastcol']:
+			CELL_VAL = get_cell_value(ws, CELL)
+			if ('[rt]' in CELL_VAL):
+				# Get function name from [rt]Error MyFunction(int a, int b);
+				#                                  MyFunction
+				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
+				del CELL_VAL
+				# Check loop of instance
+				if (FNAME not in dict(list_of_function_called)):
+					list_of_function_called.append([FNAME, 0])
+				else:
+					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
+				# Check is this instance called
+				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
+
+				FUNCINSTANCE = ''
+				if (FRETVAL != None) and (FRETVAL != '-'):
+					FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
+
+					if check_sequence == True:
+						data = '{}{}; '.format(data, FUNCINSTANCE)
+					else:
+						data = '{}{{{}}} '.format(data, FUNCINSTANCE)
+
+			CELL = coor_shift_right(ws, CELL)
+		data = '{}\", '.format(data)
+
+		# Add execute - 1: execute this function
+		judgment = find_cell(ws, 'Judgment')
+		if ('Exclude' in get_cell_value(ws, [judgment['firstcol'], cur_row])):
+			data = '{}0, '.format(data)
+		else:
+			data = '{}1, '.format(data)
+
+		# Add input param by detect [a]
+		# TODO: Add detect structure - DONE
+
+		data = data + get_data(ws, '[a]', input_factor, cur_row)
+
+		# Add global variable by detect [g]
+		data = data + get_data(ws, '[g]', input_factor, cur_row)
+
+		# TODO: Add detect check [a] param output - DONE
+		data = data + get_data(ws, '[a]', output_element, cur_row)
+
+		# Add expected global variable by detect [g] in output element
+		data = data + get_data(ws, '[g]', output_element, cur_row)
+
+		# Add test result by detect 'Return value' in output element
+		data = data + get_data(ws, 'Return value', output_element, cur_row)
+
+		# Write all the data to file
+		data = '{}}},\n'.format(data[:-2])
+		dot_h.write(data)
+
+	# End of file
+	data = '};\n'
+	dot_h.write(data)
+	dot_h.close()
+	del dot_h
+
+# Create stub instance
+def create_stub_file(ws, worksheet, src_dir, src):
+	global gpbar
+	gpbar.write('Stub function\'s instance write to : ' + src_dir + 'test_' + src + '.c')
+	# Create stub function
+	# Get the first test case's row, and the last test case's row, and the current col
+	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+	# Get Input factor range
+	input_factor = find_cell(ws, 'Input factor')
+	# Get Output element range
+	output_element = find_cell(ws, 'Output element')
+
+	for cur_row in range(start_row, end_row + 1):
+		# Get test case number
+		tc_num = get_cell_value(ws, [testcase_col, cur_row])
+		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
+		# Create instance for test case num
+
+		list_of_function_called = list()
+		input_cell = coor_shift_down(ws, input_factor)
+		while input_cell['lastcol'] <= input_factor['lastcol']:
+			# Check [rt]
+			#cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+			CELL_VAL = get_cell_value(ws, input_cell)
+			if ('[rt]' in CELL_VAL):
+				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
+				del CELL_VAL
+				# Check loop of instance
+				if (FNAME not in dict(list_of_function_called)):
+					list_of_function_called.append([FNAME, 0])
+				else:
+					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
+					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
+
+				void_return_type = False
+
+				# Get function name
+				FNAME = get_cell_value(ws, input_cell)
+
+				if 'void' in FNAME[:FNAME.find('(')]:
+					void_return_type = True
+
+				# Extract function name from [rt]type function_name(...);
+				FNAME = FNAME[FNAME.find(' ') + 1: FNAME.find('(')]
+
+				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
+				title = '/* Isolate for function %s */\n' %(FNAME)
+				# Set instance
+				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]))
+				outval_data = ''
+
+				# CHECK DATA input of stub function
+				check_data = ''
+				output_cell = coor_shift_down(ws, output_element) 
+				while output_cell['lastcol'] <= output_element['lastcol']:
+					# Check [f] symbol and check the function name
+					if ('[f]' in get_cell_value(ws, output_cell)) and (FNAME in get_cell_value(ws, output_cell)):
+						check_point = coor_shift_down(ws, output_cell)
+						while check_point['lastcol'] <= output_cell['lastcol']:
+
+							# TODO: add replace 'CHECK_S_INT' - Done
+							check_point_val = str(get_cell_value(ws, [check_point['firstcol'] , cur_row]))
+							if (check_point_val != None) and (check_point_val) != '-':
+
+								# Classify the check value
+								if ('UTS_NON0' in check_point_val) or ('false' in check_point_val) or ('true' in check_point_val): 
+									check_data = '{}\t\tCHECK_BOOLEAN(({} != NULL), true);\n'.format(check_data, get_cell_value(ws, check_point))
+								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val) or ('Connection' in check_point_val):
+									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
+								elif (check_point_val.isdigit()):
+									check_data = '{}\t\tCHECK_S_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
+								elif ('u' or 'U' in check_point_val):
+									check_data = '{}\t\tCHECK_U_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
+								else:
+									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
+
+							check_point = coor_shift_right(ws, check_point)
+					output_cell = coor_shift_right(ws, output_cell)
+
+				# Function output value
+				if input_cell['lastcol'] < input_factor['lastcol']:
+					outval_range = coor_shift_right(ws, input_cell)
+					if ('[f]' in get_cell_value(ws, outval_range)):
+						outval_cell = coor_shift_down(ws, outval_range)
+						while outval_cell['lastcol'] <= outval_range['lastcol']:
+							outval = str(get_cell_value(ws, [outval_cell['firstcol'], cur_row]))
+							if (outval != None) and (outval != '-'):
+								if ('UTS' in outval):
+									return_val = get_cell_value(ws, outval_cell)
+									if '*' in return_val:
+										outval_data = '{}\t\t{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
+									else:
+										outval_data = '{}\t\t*{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
+								else:
+									return_val = get_cell_value(ws, outval_cell)
+									if '*' in return_val:
+										outval_data = '{}\t\t{} = {};\n'.format(outval_data, return_val, outval)
+									else:
+										outval_data = '{}\t\t*{} = {};\n'.format(outval_data, return_val, outval)
+							outval_cell = coor_shift_right(ws, outval_cell)
+
+				# Set return value for Stub function
+				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+
+				instance_existed = True
+
+				if void_return_type == True:
+					data_return = '\t\treturn;\n\t}\n'
+				else:
+					if return_value != None and return_value != '-':
+						data_return = '\t\treturn {};\n\t}}\n'.format(return_value)
+					else:
+						# This instance is not used
+						instance_existed = False
+
+				if instance_existed:
+					data = if_instance + check_data + outval_data + data_return
+
+					# Get position for append data to source
+					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
+					# Write file to test program of Cantata
+
+					data = title + data
+
+			input_cell = coor_shift_right(ws, input_cell)
+
+def pcl_to_testprogram(ws):
+	list_of_input = []
+	data_1 = ''
+	data_2 = ''
+	data_3 = ''
+	data_4 = ''
+
+	cell_1 = coor_find_cell(ws, 'Input factor')
+	cell_2 = coor_shift_down(ws, cell_1)
+	while cell_2['lastcol'] <= cell_1['lastcol']:
+		cell_2_val = get_cell_value(ws, cell_2)
+
+		if '[g]' in cell_2_val:
+			is_global = True
+		else:
+			is_global = False
+
+		if '[a]' in cell_2_val:
+			is_argument = True
+		else:
+			is_argument = False
+
+		if is_global == True or is_argument == True:
+			cell_2_val = cell_2_val.replace('[a]', '').replace('[g]', '')
+			cell_2_type, cell_2_name = get_type_name(ws, cell_2_val)
+			is_cell_2_pointer = check_pointer(ws, cell_2_val)
+			is_cell_2_structure = check_structure(ws, cell_2_val)
+			exist = False
+
+			if cell_2_name not in list_of_input:
+				list_of_input.append(cell_2_name)
+			else:
+				exist = True
+			###
+			if exist == False and is_global == False:
+				temp_data = '\t\t{};\n'.format(cell_2_val.replace('[a]', '').replace('[g]', '').replace(';', ''))
+				data_1 = '{}{}'.format(data_1, temp_data)
+
+			if (cell_2['lastcol'] - cell_2['firstcol'] == 0) and (exist == False):
+				'''NOT MERGED CELL'''
+
+				if is_cell_2_pointer:
+					###
+					temp_data = '\t{} local_{};\n'.format(cell_2_type, cell_2_name)
+					data_2 = '{}{}'.format(data_2, temp_data)
+					###
+					temp_data = '\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t CURRENT_TEST.{name} = &local_{name};\n\t\t}}\n'.format(name = cell_2_name)
+					data_3 = '{}{}'.format(data_3, temp_data)
+				pass
+
+			else:
+				'''IS MERGED CELL'''
+				cell_2_number = ''
+				if '[' in cell_2_val:
+					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
+					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
+
+				cell_3 = coor_shift_down(ws, cell_2)
+				while cell_3['lastcol'] <= cell_2['lastcol']:
+					cell_3_val = get_cell_value(ws, cell_3)
+					cell_3_type, cell_3_name = get_type_name(ws, cell_3_val)
+					is_cell_3_pointer = check_pointer(ws, cell_3_val)
+					is_cell_3_structure = check_structure(ws, cell_3_val)
+					###
+					if '[' in cell_3_name:
+						cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+						cell_3_name = cell_3_name[: cell_3_name.find('[')]
+					###
+					if '[' in cell_3_val:
+						cell_3_val = cell_3_val[: cell_3_val.find('[')]
+					temp_data = '\t\t{}{};\n'.format(cell_3_val, cell_2_number)
+					data_1 = '{}{}'.format(data_1, temp_data)
+
+					if is_cell_3_pointer:
+						###
+						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name)
+						data_2 = '{}{}'.format(data_2, temp_data)
+						###
+						temp_data = '\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name, number = cell_2_number)
+						data_3 = '{}{}'.format(data_3, temp_data)
+					###
+					if is_global:
+						if is_cell_3_pointer:
+							access = '->'
+						else:
+							access = '.'
+						temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name.replace(';', ''), cell_3_name.replace(';', ''), cell_2_number)
+						data_3 = '{}{}'.format(data_3, temp_data)
+
+
+					cell_3 = coor_shift_right(ws, cell_3)
+				pass
+		cell_2 = coor_shift_right(ws, cell_2)
+
+	del list_of_input
+
+	cell_1 = coor_find_cell(ws, 'Output element')
+	cell_2 = coor_shift_down(ws, cell_1)
+	while cell_2['lastcol'] <= cell_1['lastcol']:
+		cell_2_val = get_cell_value(ws, cell_2)
+
+		if '[g]' in cell_2_val:
+			is_global = True
+			cell_2_val = cell_2_val.replace('[g]', '')
+		else:
+			is_global = False
+
+		if '[a]' in cell_2_val:
+			is_argument = True
+			cell_2_val = cell_2_val.replace('[a]', '')
+		else:
+			is_argument = False
+
+		if is_global == True or is_argument == True:
+			cell_2_type, cell_2_name = get_type_name(ws, cell_2_val)
+			is_cell_2_pointer = check_pointer(ws, cell_2_val)
+			is_cell_2_structure = check_structure(ws, cell_2_val)
+
+			if cell_2['lastcol'] - cell_2['firstcol'] == 0:
+
+				if is_cell_2_pointer:
+					###
+					temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name)
+					data_1 = '{}{}'.format(data_1, temp_data)
+
+					init_val = get_cell_value(ws, coor_shift_down(ws, cell_2))
+					if init_val != '-' and init_val != None:
+						###
+						temp_data = '\tlocal_{} = {};\n'.format(cell_2_name, init_val)
+						data_2 = '{}{}'.format(data_2, temp_data)
+
+					###
+					check_type = select_check_type(ws, cell_2_val)
+					temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
+						check = check_type,\
+						left = 'local_{}'.format(cell_2_name),\
+						right = 'CURRENT_TEST.expected_{}'.format(cell_2_name)\
+					)
+					data_4 = '{}{}'.format(data_4, temp_data)
+
+				pass
+			else:
+				'''IS MERGED CELL'''
+				cell_2_number = ''
+				if '[' in cell_2_val:
+					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
+					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
+
+				cell_3 = coor_shift_down(ws, cell_2)
+				while cell_3['lastcol'] <= cell_2['lastcol']:
+					cell_3_val = get_cell_value(ws, cell_3)
+					cell_3_type, cell_3_name = get_type_name(ws, cell_3_val)
+					is_cell_3_pointer = check_pointer(ws, cell_3_val)
+					is_cell_3_structure = check_structure(ws, cell_3_val)
+
+					###
+					if '[' in cell_3_name:
+						cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+						cell_3_name = cell_3_name[: cell_3_name.find('[')]
+
+					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name, cell_2_number)
+					data_1 = '{}{}'.format(data_1, temp_data)
+
+					###
+					if is_global:
+
+						if is_cell_3_pointer:
+							access = '->'
+						else:
+							access = '.'
+						check_type = select_check_type(ws, cell_3_val)
+						temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
+							check = check_type,\
+							left = '{}{}{}'.format(cell_2_name, access, cell_3_name),\
+							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name, cell_2_number)\
+						)
+						data_4 = '{}{}'.format(data_4, temp_data)
+
+					cell_3 = coor_shift_right(ws, cell_3)
+				pass
+
+		cell_2 = coor_shift_right(ws, cell_2)
+
+	return data_1[:-1], data_2, data_3, data_4
+
+def get_input_argument(ws, top_cell_name:str, target:str)->str:
+	valid_top_cell_name = ['Input factor', 'Output element']
+	valid_target = ['[a]', '[f]', '[rt]', '[g]']
+	if (target not in valid_target) or (top_cell_name not in valid_top_cell_name):
+		return
+	del valid_top_cell_name, valid_target
+
+	cell_1 = coor_find_cell(ws, top_cell_name)
+	cell_2 = coor_shift_down(ws, cell_1)
+	data = ''
+	list_of_handle = []
+	while (cell_2['lastcol'] <= cell_1['lastcol']):
+		### Begin of while
+		cell_2_val = get_cell_value(ws, cell_2)
+		if target in cell_2_val:
+			cell_2_type, cell_2_name = get_type_name(ws, cell_2_val)
+			is_cell_2_pointer = check_pointer(ws, cell_2_val)
+			is_cell_2_structure = check_structure(ws, cell_2_val)
+			if cell_2_name in list_of_handle:
+				pass
+			else:
+				list_of_handle.append(cell_2_name)
+				data_append = 'CURRENT_TEST.{},'.format(cell_2_name)
+				data = '{}{}'.format(data, data_append)
+
+		###	Next of while
+		cell_2 = coor_shift_right(ws, cell_2)
+	return data[:-1]
+	pass
+
+def create_test_program(ws, func_name:str)->str:
+	data_1, data_2, data_3, data_4 = pcl_to_testprogram(ws)
+	input_argument = get_input_argument(ws, 'Input factor', '[a]')
+	data = '''\
+void test_{func_name}(){{
+	struct CPPTH_LOOP_INPUT_STRUCT {{
+		/* Test case data declarations */
+		char* name;
+		char* description;
+		char* expected_calls;
+		int execute;
+{data_1}
+		int32_t expected_returnValue;
+	}};
+	int32_t returnValue;
+	/* Import external data declarations */
+	#include "test_{func_name}.h"
+
+	/* Set global data */
+	initialise_global_data();
+	/* Set expected values for global data checks */
+	initialise_expected_global_data();
+
+{data_2}
+
+	START_TEST_LOOP();
+		/* Expected Call Sequence  */
+		EXPECTED_CALLS(CURRENT_TEST.expected_calls);
+{data_3}
+			/* Call SUT */
+			returnValue = {func_name}({input_argument});
+
+			/* Test case checks */
+			CHECK_S_INT(returnValue, CURRENT_TEST.expected_returnValue);
+{data_4}
+		END_CALLS();
+	END_TEST_LOOP();
+}}
+'''.format(\
+	func_name = func_name,\
+	data_1 = data_1,\
+	data_2 = data_2,\
+	data_3 = data_3,\
+	data_4 = data_4,\
+	input_argument = input_argument\
+	)
+	print(data)
+	return data
