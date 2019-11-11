@@ -674,12 +674,13 @@ def pcl_to_testprogram(ws):
 							number = int(number)
 							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
 							cell_2_number = '_{}'.format(number)
+							cell_3_name = cell_3_name[: cell_3_name.find('[')]
 
 						except:
 							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
 							cell_3_name = cell_3_name[: cell_3_name.find('[')]
 
-					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name[: cell_3_name.find('[')], cell_2_number)
+					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name, cell_2_number)
 					data_1 = '{}{}'.format(data_1, temp_data)
 
 					###
@@ -693,7 +694,7 @@ def pcl_to_testprogram(ws):
 						temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
 							check = check_type,\
 							left = '{}{}{}'.format(cell_2_name, access, cell_3_name),\
-							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name[: cell_3_name.find('[')], cell_2_number)\
+							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name, cell_2_number)\
 						)
 						data_4 = '{}{}'.format(data_4, temp_data)
 
