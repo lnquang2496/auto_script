@@ -1,7 +1,8 @@
 import getopt
 import common
-from sys      import exit
+from sys      import exit, argv
 from os.path  import join
+from tqdm     import tqdm
 
 def main(argv):
 	try:
@@ -29,20 +30,42 @@ def main(argv):
 		elif opt in ("-ca", "--can_dir"):
 			src_dir = arg 
 
-		src_dir = '{}test_{}\\'.format(src_dir, source)
+	src_dir = '{}\\test_{}\\'.format(src_dir, source)
+	with tqdm(total = 7) as pbar:
+		pbar.write("Cantata dir: {}".format(src_dir))
+		pbar.write("Source name: {}".format(source))
+		pbar.write("Worksheet  : {}".format(worksheet))
 		# Get working sheet
 		ws = common.load_worksheet('{}'.format(join(inputdir, inputfile)), worksheet)
-        # Create test program
-        data = common.create_test_program(ws, worksheet)
-        start_pos = ["void test_{}(){{".format(worksheet)]
-        end_pos = ["END_TEST_LOOP();", "}"]
-        common.file_clear(src_dir, "test_{}.c".format(source), start_pos, end_pos)
+		pbar.update(1)
+		# Create test program
+		data = common.create_test_program(ws, worksheet)
+		pbar.update(1)
 
-        common.file_append(src_dir, "test_{}.c".format(source), data, start_pos)
-		# Create file dot h, contain all the test case
+		start_pos = ["/* Test Cases                                                                */",\
+					"/*****************************************************************************/",\
+					"/*****************************************************************************/"]
+
+		common.file_append(src_dir, "test_{}.c".format(source), data, start_pos, True)
+		pbar.update(1)
+		start_pos = ["/* Prototypes for test functions */",\
+					"void run_tests();",\
+					"/*****************************************************************************/"]
+		func_prototype = "void test_{}();\n".format(worksheet)
+		common.file_append(src_dir, "test_{}.c".format(source), func_prototype, start_pos, True)
+		pbar.update(1)
+		start_pos = ["/* Test Control                                                              */",\
+					"void run_tests()",\
+					"rule_set(\"*\", \"*\");"]
+		func_prototype = "\ttest_{}();\n".format(worksheet)
+		common.file_append(src_dir, "test_{}.c".format(source), func_prototype, start_pos, True)
+		pbar.update(1)
+		#Create file dot h, contain all the test case
 		common.create_test_case_file(ws, worksheet, src_dir, source, check_sequence)
-		# Create stub function
+		pbar.update(1)
+		#Create stub function
 		common.create_stub_file(ws, worksheet, src_dir, source)
+		pbar.update(1)
 
 if __name__ == "__main__":
-	main(sys.argv[1:])
+	main(argv[1:])

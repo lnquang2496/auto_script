@@ -119,7 +119,7 @@ def get_type_name(ws, value:str)->str:
 	return cell_type[:-1], cell_name
 
 def check_pointer(ws, value:str)->bool:
-	valid_pointer = ['*', 'IODevice ', 'DevTree_Node']
+	valid_pointer = ['*', 'IODevice ', 'DevTree_Node', 'XFRAME']
 	for x in valid_pointer:
 		if x in value:
 			return True
@@ -132,8 +132,17 @@ def check_structure(ws, value:str)->bool:
 			return True
 	return False
 
+def row_of_testcase(ws, symbol):
+	cur_cell = coor_find_cell(ws, symbol)
+	col_of_tc = cur_cell['firstcol']
+	first_row_of_tc = cur_cell['lastrow'] + 1
+	while (get_cell_value(ws, cur_cell) != None):
+		cur_cell = coor_shift_down(ws, cur_cell)
+	last_row_of_tc = cur_cell['firstrow'] - 1
+	return first_row_of_tc, last_row_of_tc, col_of_tc
+
 def select_check_type(ws, value:str)->str:
-	check_address = ['IODevice ']
+	check_address = ['IODevice ', 'char']
 	check_u_int = ['uint', 'unsigned', 'Address']
 	check_bool = ['bool', 'Boolean']
 	# default check type is CHECK_S_INT
@@ -223,12 +232,12 @@ def file_clear(f_path:str, f_name:str, start_pos, end_pos):
 					if start_pos_count == len(start_pos):
 						flag_clear = True
 						o.write(l)
-
-				if end_pos_count < len(end_pos):
-					if end_pos[end_pos_count] in l:
-						end_pos_count += 1
-					if end_pos_count == len(end_pos):
-						flag_clear = False
+				if flag_clear:
+					if end_pos_count < len(end_pos):
+						if end_pos[end_pos_count] in l:
+							end_pos_count += 1
+						if end_pos_count == len(end_pos):
+							flag_clear = False
 			
 			if flag_clear:
 				l = ""
@@ -250,19 +259,17 @@ def get_data(ws, target, input_range, cur_row):
 		if (target in get_cell_value(ws, input_cell)):
 			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
 				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				#data = data + str(cur_input_param) + ', '
 				data = '{}{}, '.format(data, cur_input_param)
 			else:
-				#data = data + '{'
-				data = '{}{{'.format(data)
+				#data = '{}{{'.format(data)
 				element_cell = coor_shift_down(ws, input_cell)
 				while element_cell['lastcol'] <= input_cell['lastcol']:
 					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
 					#data = data + str(cur_input_param) + ', '
 					data = '{}{}, '.format(data, cur_input_param)
 					element_cell = coor_shift_right(ws, element_cell)
-				#data = data[:-2] + '}, '
-				data = '{}}}, '.format(data[:-2])
+
+				#data = '{}}}, '.format(data[:-2])
 
 		input_cell = coor_shift_right(ws, input_cell)
 	return data
@@ -272,17 +279,17 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	# Get Test case start row and end row
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
 	# Get Input factor range
-	input_factor = find_cell(ws, 'Input factor')
+	input_factor = coor_find_cell(ws, 'Input factor')
 	# Get Output element range
-	output_element = find_cell(ws, 'Output element')
+	output_element = coor_find_cell(ws, 'Output element')
 	# Create file .h
 
-	dot_h_dir = '{}test_{}\\test_{}.h'.format(src_dir, src, worksheet)
+	dot_h_dir = '{}test_{}.h'.format(src_dir, worksheet)
 	dot_h = open(dot_h_dir, 'w')
 
 	# Begin of file
 	data = 'static struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
-	
+
 	dot_h.write(data)
 	# Add test case
 	# Input factor
@@ -334,7 +341,7 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		data = '{}\", '.format(data)
 
 		# Add execute - 1: execute this function
-		judgment = find_cell(ws, 'Judgment')
+		judgment = coor_find_cell(ws, 'Judgment')
 		if ('Exclude' in get_cell_value(ws, [judgment['firstcol'], cur_row])):
 			data = '{}0, '.format(data)
 		else:
@@ -369,15 +376,13 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 
 # Create stub instance
 def create_stub_file(ws, worksheet, src_dir, src):
-	global gpbar
-	gpbar.write('Stub function\'s instance write to : ' + src_dir + 'test_' + src + '.c')
 	# Create stub function
 	# Get the first test case's row, and the last test case's row, and the current col
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
 	# Get Input factor range
-	input_factor = find_cell(ws, 'Input factor')
+	input_factor = coor_find_cell(ws, 'Input factor')
 	# Get Output element range
-	output_element = find_cell(ws, 'Output element')
+	output_element = coor_find_cell(ws, 'Output element')
 
 	for cur_row in range(start_row, end_row + 1):
 		# Get test case number
@@ -489,6 +494,7 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
 					# Write file to test program of Cantata
 
+					file_append(src_dir, "test_{}.c".format(src), data, position, True)
 					data = title + data
 
 			input_cell = coor_shift_right(ws, input_cell)
@@ -549,7 +555,7 @@ def pcl_to_testprogram(ws):
 				if '[' in cell_2_val:
 					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
 					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
-
+		
 				cell_3 = coor_shift_down(ws, cell_2)
 				while cell_3['lastcol'] <= cell_2['lastcol']:
 					cell_3_val = get_cell_value(ws, cell_3)
@@ -557,9 +563,19 @@ def pcl_to_testprogram(ws):
 					is_cell_3_pointer = check_pointer(ws, cell_3_val)
 					is_cell_3_structure = check_structure(ws, cell_3_val)
 					###
+					# if '[' in cell_3_name:
+					# 	cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+					# 	cell_3_name = cell_3_name[: cell_3_name.find('[')]
 					if '[' in cell_3_name:
-						cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-						cell_3_name = cell_3_name[: cell_3_name.find('[')]
+						number = cell_3_name[cell_3_name.find('[') + 1 : cell_3_name.find(']')]
+						try:
+							number = int(number)
+							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+							cell_2_number = '_{}'.format(number)
+
+						except:
+							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+							cell_3_name = cell_3_name[: cell_3_name.find('[')]
 					###
 					if '[' in cell_3_val:
 						cell_3_val = cell_3_val[: cell_3_val.find('[')]
@@ -579,9 +595,13 @@ def pcl_to_testprogram(ws):
 							access = '->'
 						else:
 							access = '.'
-						temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name.replace(';', ''), cell_3_name.replace(';', ''), cell_2_number)
+						temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name.replace(';', ''), cell_3_name[: cell_3_name.find('[')], cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
+					if exist:
+						temp_data = '\t\tlocal_{cell_2_name}.{cell_3_name} = CURRENT_TEST.{cell_3_name};\n'.format(\
+							cell_2_name = cell_2_name, cell_3_name = cell_3_name)
+						data_3 = '{}{}'.format(data_3, temp_data)
 
 					cell_3 = coor_shift_right(ws, cell_3)
 				pass
@@ -636,10 +656,6 @@ def pcl_to_testprogram(ws):
 				pass
 			else:
 				'''IS MERGED CELL'''
-				cell_2_number = ''
-				if '[' in cell_2_val:
-					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
-					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
 
 				cell_3 = coor_shift_down(ws, cell_2)
 				while cell_3['lastcol'] <= cell_2['lastcol']:
@@ -648,12 +664,22 @@ def pcl_to_testprogram(ws):
 					is_cell_3_pointer = check_pointer(ws, cell_3_val)
 					is_cell_3_structure = check_structure(ws, cell_3_val)
 
+					cell_2_number = ''
+					if '[' in cell_2_val:
+						cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
 					###
 					if '[' in cell_3_name:
-						cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-						cell_3_name = cell_3_name[: cell_3_name.find('[')]
+						number = cell_3_name[cell_3_name.find('[') + 1 : cell_3_name.find(']')]
+						try:
+							number = int(number)
+							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+							cell_2_number = '_{}'.format(number)
 
-					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name, cell_2_number)
+						except:
+							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+							cell_3_name = cell_3_name[: cell_3_name.find('[')]
+
+					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name[: cell_3_name.find('[')], cell_2_number)
 					data_1 = '{}{}'.format(data_1, temp_data)
 
 					###
@@ -667,7 +693,7 @@ def pcl_to_testprogram(ws):
 						temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
 							check = check_type,\
 							left = '{}{}{}'.format(cell_2_name, access, cell_3_name),\
-							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name, cell_2_number)\
+							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name[: cell_3_name.find('[')], cell_2_number)\
 						)
 						data_4 = '{}{}'.format(data_4, temp_data)
 
@@ -726,16 +752,15 @@ void test_{func_name}(){{
 	/* Import external data declarations */
 	#include "test_{func_name}.h"
 
-	/* Set global data */
-	initialise_global_data();
-	/* Set expected values for global data checks */
-	initialise_expected_global_data();
-
 {data_2}
 
 	START_TEST_LOOP();
 		/* Expected Call Sequence  */
 		EXPECTED_CALLS(CURRENT_TEST.expected_calls);
+		/* Set global data */
+		initialise_global_data();
+		/* Set expected values for global data checks */
+		initialise_expected_global_data();
 {data_3}
 			/* Call SUT */
 			returnValue = {func_name}({input_argument});
@@ -754,5 +779,4 @@ void test_{func_name}(){{
 	data_4 = data_4,\
 	input_argument = input_argument\
 	)
-	print(data)
 	return data
