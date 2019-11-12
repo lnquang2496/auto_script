@@ -175,6 +175,7 @@ def file_append(f_path:str, f_name:str, data:str, position, append_type:bool = F
 
 	with open(file_targ, "r") as i, open(file_temp, "w") as o:
 		for index, l in enumerate(i):
+			backup_l = l
 			if isinstance(position, int):
 				if position == index:
 					l = append_data(l, data)
@@ -189,8 +190,11 @@ def file_append(f_path:str, f_name:str, data:str, position, append_type:bool = F
 						pos_count += 1
 					if pos_count == len(position):
 						l = append_data(l, data)
-
-			o.write(l)
+			try:
+				o.write(l)
+			except:
+				o.write(backup_l)
+				print(l)
 
 	if isfile(file_old):
 		remove(file_old)
@@ -555,7 +559,7 @@ def pcl_to_testprogram(ws):
 				if '[' in cell_2_val:
 					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
 					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
-		
+
 				cell_3 = coor_shift_down(ws, cell_2)
 				while cell_3['lastcol'] <= cell_2['lastcol']:
 					cell_3_val = get_cell_value(ws, cell_3)
@@ -591,11 +595,15 @@ def pcl_to_testprogram(ws):
 						data_3 = '{}{}'.format(data_3, temp_data)
 					###
 					if is_global:
-						if is_cell_3_pointer:
-							access = '->'
+						# if is_cell_3_pointer:
+						# 	access = '->'
+						# else:
+						# 	access = '.'
+						access = '.'
+						if ('char' in cell_3_type):
+							temp_data = '\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name, cell_2_number)
 						else:
-							access = '.'
-						temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name.replace(';', ''), cell_3_name[: cell_3_name.find('[')], cell_2_number)
+							temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name, cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
 					if exist:
@@ -652,6 +660,22 @@ def pcl_to_testprogram(ws):
 						right = 'CURRENT_TEST.expected_{}'.format(cell_2_name)\
 					)
 					data_4 = '{}{}'.format(data_4, temp_data)
+
+				if is_global:
+					if '[' in cell_2_name:
+						temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name.replace("[", "_").replace("]", ""))
+					else:
+						temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name)
+					data_1 = '{}{}'.format(data_1, temp_data)
+
+					check_type = select_check_type(ws, cell_2_val)
+					temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
+						check = check_type,\
+						left = '{}'.format(cell_2_name),\
+						right = 'CURRENT_TEST.expected_{}'.format(cell_2_name.replace("[", "_").replace("]", ""))\
+					)
+					data_4 = '{}{}'.format(data_4, temp_data)
+					pass
 
 				pass
 			else:
