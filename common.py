@@ -294,6 +294,12 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	# Begin of file
 	data = 'static struct CPPTH_LOOP_INPUT_STRUCT CPPTH_LOOP_INPUT[] = {\n'
 
+	def get_func_name(mark:str, target:str)->str:
+		func_full = target.replace(mark, '')
+		func_type = func_full[ : func_full.find(' ')]
+		func_name = func_full[ func_full.find(' ') + 1 : func_full.find('(')]
+		return func_type, func_name
+
 	dot_h.write(data)
 	# Add test case
 	# Input factor
@@ -316,11 +322,14 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		data = '{}"'.format(data)
 		CELL = coor_shift_down(ws, input_factor)
 		list_of_function_called = list()
+		count = 0
 		while CELL['lastcol'] <= input_factor['lastcol']:
 			CELL_VAL = get_cell_value(ws, CELL)
 			if ('[rt]' in CELL_VAL):
 				# Get function name from [rt]Error MyFunction(int a, int b);
 				#                                  MyFunction
+				FTYPE, FNAME = get_func_name('[rt]', CELL_VAL)
+				'''
 				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
 				del CELL_VAL
 				# Check loop of instance
@@ -329,18 +338,19 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 				else:
 					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
 					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
+				'''
 				# Check is this instance called
 				FRETVAL = get_cell_value(ws, [CELL['firstcol'], cur_row])
 
 				FUNCINSTANCE = ''
 				if (FRETVAL != None) and (FRETVAL != '-'):
-					FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
-
+					#FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
+					FUNCINSTANCE = f'{FNAME}#{tc_num}_{count}'
 					if check_sequence == True:
 						data = '{}{}; '.format(data, FUNCINSTANCE)
 					else:
 						data = '{}{{{}}} '.format(data, FUNCINSTANCE)
-
+				count += 1
 			CELL = coor_shift_right(ws, CELL)
 		data = '{}\", '.format(data)
 
@@ -378,7 +388,8 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	dot_h.close()
 	del dot_h
 
-# Create stub instance
+# Create stub instance - OLD
+'''
 def create_stub_file(ws, worksheet, src_dir, src):
 	# Create stub function
 	# Get the first test case's row, and the last test case's row, and the current col
@@ -502,6 +513,140 @@ def create_stub_file(ws, worksheet, src_dir, src):
 					data = title + data
 
 			input_cell = coor_shift_right(ws, input_cell)
+'''
+# Create stub instance
+def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
+	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
+	cell_1_left                      = coor_find_cell(ws, 'Input factor')
+	cell_1_right                     = coor_find_cell(ws, 'Output element')
+
+	def get_func_name(mark:str, target:str)->str:
+		func_full = target.replace(mark, '')
+		func_type = func_full[ : func_full.find(' ')]
+		func_name = func_full[ func_full.find(' ') + 1 : func_full.find('(')]
+		return func_type, func_name
+
+	def get_check_type(val:str)->str:
+		type_1 = ['true', 'false']
+
+		for i in type_1:
+			if i in val:
+				return 'CHECK_BOOLEAN'
+
+		if '0x' in val:
+			if val.endswith('u') or val.endswith('U'):
+				return 'CHECK_U_INT'
+			else:
+				return 'CHECK_S_INT'
+
+		if val.endswith('u') or val.endswith('U'):
+			if val.replace('u', '').replace('U', '').isdigit:
+				return 'CHECK_U_INT'
+
+		if val.isdigit:
+			return 'CHECK_S_INT'
+
+		return 'CHECK_ADDRESS'
+	for cur_row in range(start_row, end_row + 1):
+		func_list = list()
+		tc_num = get_cell_value(ws, [testcase_col, cur_row]).replace('-', '_')
+		count = 0
+
+		cell_2_left = coor_shift_down(ws, cell_1_left)
+		while (cell_2_left['lastcol'] <= cell_1_left['lastcol']):
+			cell_2_left_val = get_cell_value(ws, cell_2_left)
+
+			if '[rt]' in cell_2_left_val:
+				func_type, func_name = get_func_name('[rt]', cell_2_left_val)
+				cur_val = get_cell_value(ws, [cell_2_left['firstcol'], cur_row])
+
+				title = f'/* Isolate for function {func_name} */\n'
+
+				func_list.append(f'{func_name}_{count}')
+
+				# Set instance_data
+				instance_data = f'\tIF_INSTANCE(\"{tc_num}_{count}\") {{\n'
+
+				# START: Set return value of funtion
+				if cur_val == 'None' or cur_val == '-':
+					pass
+				else:
+					if 'void' in func_type:
+						return_data = '\t\treturn;\n'
+					else:
+						return_data = '\t\treturn {};\n'.format(cur_val)
+					# END: Set return value of funtion
+					# START: Set output value of function
+					temp_cell_2_left = coor_shift_right(ws, cell_2_left)
+					temp_cell_2_val  = get_cell_value(ws, temp_cell_2_left)
+					output_data = str()
+					if '[f]' in temp_cell_2_val and func_name in temp_cell_2_val and temp_cell_2_left['lastcol'] <= cell_1_left['lastcol']:
+						cell_2_left = temp_cell_2_left
+						cell_3_left = coor_shift_down(ws, cell_2_left)
+						while cell_3_left['lastcol'] <= cell_2_left['lastcol']:
+							cell_3_left_val = get_cell_value(ws, cell_3_left)
+							cur_val = get_cell_value(ws, [cell_3_left['firstcol'], cur_row])
+
+							if cur_val != 'None' and cur_val != '-':
+								if 'UTS' in cur_val:
+									if cur_val.find(')') != -1:
+										cast_type = cur_val[:cur_val.find(')') + 1]
+									else:
+										cast_type = ''
+
+									if '*' in cell_3_left_val:
+										output_data = '{}\t\t{} = {}&local;\n'.format(output_data, cell_3_left_val, cast_type)
+									else:
+										output_data = '{}\t\t*{} = {}&local;\n'.format(output_data, cell_3_left_val, cast_type)
+								else:
+									if '*' in cell_3_left_val:
+										output_data = '{}\t\t{} = {};\n'.format(output_data, cell_3_left_val, cur_val)
+									else:
+										output_data = '{}\t\t*{} = {};\n'.format(output_data, cell_3_left_val, cur_val)
+
+							cell_3_left = coor_shift_right(ws, cell_3_left)
+					# END: Set output value of function
+					# START: Output element process
+					temp_count = 0
+					temp_func = str()
+					check_data = str()
+					cell_2_right = coor_shift_down(ws, cell_1_right)
+					while (cell_2_right['lastcol'] <= cell_1_right['lastcol']):
+						cell_2_right_val = get_cell_value(ws, cell_2_right)
+						######
+						if '[f]' in cell_2_right_val:
+							temp_func_type, temp_func_name = get_func_name('[f]', cell_2_right_val)
+							cell_3_right = coor_shift_down(ws, cell_2_right)
+
+							temp_func = f'{temp_func_name}_{temp_count}'
+							temp_count += 1
+
+							process = False
+							if func_list[count] == temp_func:
+									process = True
+							if process:
+								while cell_3_right['lastcol'] <= cell_2_right['lastcol']:
+									cell_3_right_val = get_cell_value(ws, cell_3_right)
+									cur_val = get_cell_value(ws, [cell_3_right['firstcol'], cur_row])
+									if cur_val != 'None' and cur_val != '-':
+										if 'UTS_' in cur_val:
+											check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} != NULL), true);\n'
+										else:
+											check_type = get_check_type(cur_val)
+											check_data = f'{check_data}\t\t{check_type}({cell_3_right_val}, {cur_val});\n'
+
+									cell_3_right = coor_shift_right(ws, cell_3_right)
+						cell_2_right = coor_shift_right(ws, cell_2_right)
+					# END: Output element process
+
+					final_data = f'{instance_data}{check_data}{output_data}{return_data}\t}}\n'
+
+
+					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
+					file_append(src_dir, f"test_{src}.c", final_data, position, True)
+
+				count += 1
+			cell_2_left = coor_shift_right(ws, cell_2_left)
 
 def pcl_to_testprogram(ws):
 	list_of_input = []
@@ -570,16 +715,18 @@ def pcl_to_testprogram(ws):
 					# if '[' in cell_3_name:
 					# 	cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
 					# 	cell_3_name = cell_3_name[: cell_3_name.find('[')]
+					cell_3_name_new = cell_3_name
 					if '[' in cell_3_name:
 						number = cell_3_name[cell_3_name.find('[') + 1 : cell_3_name.find(']')]
 						try:
 							number = int(number)
 							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
 							cell_2_number = '_{}'.format(number)
+							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 
 						except:
 							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-							cell_3_name = cell_3_name[: cell_3_name.find('[')]
+							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 					###
 					if '[' in cell_3_val:
 						cell_3_val = cell_3_val[: cell_3_val.find('[')]
@@ -588,10 +735,10 @@ def pcl_to_testprogram(ws):
 
 					if is_cell_3_pointer:
 						###
-						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name)
+						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name_new)
 						data_2 = '{}{}'.format(data_2, temp_data)
 						###
-						temp_data = '\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name, number = cell_2_number)
+						temp_data = '\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 					###
 					if is_global:
@@ -601,14 +748,14 @@ def pcl_to_testprogram(ws):
 						# 	access = '.'
 						access = '.'
 						if ('char' in cell_3_type):
-							temp_data = '\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name, cell_2_number)
+							temp_data = '\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name_new, cell_2_number)
 						else:
-							temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name, cell_2_number)
+							temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name_new, cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
 					if exist:
 						temp_data = '\t\tlocal_{cell_2_name}.{cell_3_name} = CURRENT_TEST.{cell_3_name};\n'.format(\
-							cell_2_name = cell_2_name, cell_3_name = cell_3_name)
+							cell_2_name = cell_2_name, cell_3_name = cell_3_name_new)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
 					cell_3 = coor_shift_right(ws, cell_3)
@@ -650,7 +797,7 @@ def pcl_to_testprogram(ws):
 					if init_val != '-' and init_val != None:
 						###
 						temp_data = '\tlocal_{} = {};\n'.format(cell_2_name, init_val)
-						data_2 = '{}{}'.format(data_2, temp_data)
+						data_3 = '{}{}'.format(data_3, temp_data)
 
 					###
 					check_type = select_check_type(ws, cell_2_val)
@@ -692,19 +839,20 @@ def pcl_to_testprogram(ws):
 					if '[' in cell_2_val:
 						cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
 					###
+					cell_3_name_new = cell_3_name
 					if '[' in cell_3_name:
 						number = cell_3_name[cell_3_name.find('[') + 1 : cell_3_name.find(']')]
 						try:
 							number = int(number)
 							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
 							cell_2_number = '_{}'.format(number)
-							cell_3_name = cell_3_name[: cell_3_name.find('[')]
+							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 
 						except:
 							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-							cell_3_name = cell_3_name[: cell_3_name.find('[')]
+							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 
-					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name, cell_2_number)
+					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name_new, cell_2_number)
 					data_1 = '{}{}'.format(data_1, temp_data)
 
 					###
@@ -718,7 +866,7 @@ def pcl_to_testprogram(ws):
 						temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
 							check = check_type,\
 							left = '{}{}{}'.format(cell_2_name, access, cell_3_name),\
-							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name, cell_2_number)\
+							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name_new, cell_2_number)\
 						)
 						data_4 = '{}{}'.format(data_4, temp_data)
 
