@@ -631,6 +631,8 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 									if cur_val != 'None' and cur_val != '-':
 										if 'UTS_' in cur_val:
 											check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} != NULL), true);\n'
+										elif 'NULL' in cur_val:
+											check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} == NULL), true);\n'
 										else:
 											check_type = get_check_type(cur_val)
 											check_data = f'{check_data}\t\t{check_type}({cell_3_right_val}, {cur_val});\n'
@@ -694,7 +696,7 @@ def pcl_to_testprogram(ws):
 					temp_data = '\t{} local_{};\n'.format(cell_2_type, cell_2_name)
 					data_2 = '{}{}'.format(data_2, temp_data)
 					###
-					temp_data = '\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t CURRENT_TEST.{name} = &local_{name};\n\t\t}}\n'.format(name = cell_2_name)
+					temp_data = '\t\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t CURRENT_TEST.{name} = &local_{name};\n\t\t}}\n'.format(name = cell_2_name)
 					data_3 = '{}{}'.format(data_3, temp_data)
 				pass
 
@@ -738,7 +740,7 @@ def pcl_to_testprogram(ws):
 						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name_new)
 						data_2 = '{}{}'.format(data_2, temp_data)
 						###
-						temp_data = '\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
+						temp_data = '\t\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 					###
 					if is_global:
@@ -748,13 +750,13 @@ def pcl_to_testprogram(ws):
 						# 	access = '.'
 						access = '.'
 						if ('char' in cell_3_type):
-							temp_data = '\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name_new, cell_2_number)
+							temp_data = '\t\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name_new, cell_2_number)
 						else:
-							temp_data = '\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name_new, cell_2_number)
+							temp_data = '\t\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name_new, cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
 					if exist:
-						temp_data = '\t\tlocal_{cell_2_name}.{cell_3_name} = CURRENT_TEST.{cell_3_name};\n'.format(\
+						temp_data = '\t\t\tlocal_{cell_2_name}.{cell_3_name} = CURRENT_TEST.{cell_3_name};\n'.format(\
 							cell_2_name = cell_2_name, cell_3_name = cell_3_name_new)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
@@ -796,7 +798,7 @@ def pcl_to_testprogram(ws):
 					init_val = get_cell_value(ws, coor_shift_down(ws, cell_2))
 					if init_val != '-' and init_val != None:
 						###
-						temp_data = '\tlocal_{} = {};\n'.format(cell_2_name, init_val)
+						temp_data = '\t\t\tlocal_{} = {};\n'.format(cell_2_name, init_val)
 						data_3 = '{}{}'.format(data_3, temp_data)
 
 					###
@@ -924,16 +926,14 @@ void test_{func_name}(){{
 	int32_t returnValue;
 	/* Import external data declarations */
 	#include "test_{func_name}.h"
-
 {data_2}
-
 	START_TEST_LOOP();
 		/* Expected Call Sequence  */
 		EXPECTED_CALLS(CURRENT_TEST.expected_calls);
-		/* Set global data */
-		initialise_global_data();
-		/* Set expected values for global data checks */
-		initialise_expected_global_data();
+			/* Set global data */
+			initialise_global_data();
+			/* Set expected values for global data checks */
+			initialise_expected_global_data();
 {data_3}
 			/* Call SUT */
 			returnValue = {func_name}({input_argument});

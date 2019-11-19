@@ -41,7 +41,6 @@ def main(argv):
 #undef IMR_IODEV_IMRCH3
 #undef IMR_IODEV_IMRCH4
 #undef IMR_IODEV_IMRCH5
-#undef IMR_IODEV_IMRCH0
 
 #define IMR_IODEV_IMRCH0   (700U)
 #define IMR_IODEV_IMRCH1   (701U)
