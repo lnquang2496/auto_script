@@ -142,7 +142,7 @@ def row_of_testcase(ws, symbol):
 	return first_row_of_tc, last_row_of_tc, col_of_tc
 
 def select_check_type(ws, value:str)->str:
-	check_address = ['IODevice ', 'char']
+	check_address = ['IODevice ', 'char', 'Clock', 'Semaphore', 'Task']
 	check_u_int = ['uint', 'unsigned', 'Address']
 	check_bool = ['bool', 'Boolean']
 	# default check type is CHECK_S_INT
@@ -543,6 +543,9 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 			if val.replace('u', '').replace('U', '').isdigit:
 				return 'CHECK_U_INT'
 
+		if val.upper:
+			return 'CHECK_ADDRESS'
+
 		if val.isdigit:
 			return 'CHECK_S_INT'
 
@@ -696,7 +699,7 @@ def pcl_to_testprogram(ws):
 					temp_data = '\t{} local_{};\n'.format(cell_2_type, cell_2_name)
 					data_2 = '{}{}'.format(data_2, temp_data)
 					###
-					temp_data = '\t\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t CURRENT_TEST.{name} = &local_{name};\n\t\t}}\n'.format(name = cell_2_name)
+					temp_data = '\t\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t\tCURRENT_TEST.{name} = &local_{name};\n\t\t\t}}\n'.format(name = cell_2_name)
 					data_3 = '{}{}'.format(data_3, temp_data)
 				pass
 
@@ -740,7 +743,7 @@ def pcl_to_testprogram(ws):
 						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name_new)
 						data_2 = '{}{}'.format(data_2, temp_data)
 						###
-						temp_data = '\t\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t CURRENT_TEST.{name}{number} = &local_{name};\n\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
+						temp_data = '\t\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t\tCURRENT_TEST.{name}{number} = &local_{name};\n\t\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
 						data_3 = '{}{}'.format(data_3, temp_data)
 					###
 					if is_global:
