@@ -96,7 +96,7 @@ def load_worksheet(filename:str, sheetname:str):
 	try:
 		wb = load_workbook(filename, data_only=True)
 	except:
-		sys.exit(0)
+		exit(0)
 	ws = wb[sheetname]
 	return ws
 
@@ -115,11 +115,11 @@ def get_type_name(ws, value:str)->str:
 	cell_name = all_val[len(all_val) - 1]
 	cell_type = ''
 	for i in range(len(all_val) - 1):
-		cell_type = '{}{} '.format(cell_type, all_val[i])
+		cell_type += f'{all_val[i]} '
 	return cell_type[:-1], cell_name
 
 def check_pointer(ws, value:str)->bool:
-	valid_pointer = ['*', 'IODevice ', 'DevTree_Node', 'XFRAME']
+	valid_pointer = ['*', 'IODevice ', 'DevTree_Node']
 	for x in valid_pointer:
 		if x in value:
 			return True
@@ -152,7 +152,7 @@ def select_check_type(ws, value:str)->str:
 			check_type = 'CHECK_U_INT'
 	for c in check_bool:
 		if c in value:
-			check_type = 'CHECK_BOOL'
+			check_type = 'CHECK_BOOLEAN'
 	for c in check_address:
 		if c in value:
 			check_type = 'CHECK_ADDRESS'
@@ -160,15 +160,15 @@ def select_check_type(ws, value:str)->str:
 
 def file_append(f_path:str, f_name:str, data:str, position, append_type:bool = False):
 	file_targ = join(f_path, f_name)
-	file_temp = join(f_path, "{}_temp.txt".format(f_name))
-	file_old  = join(f_path, "{}_old.txt".format(f_name))
+	file_temp = join(f_path, f_name + "_temp.txt")
+	file_old  = join(f_path, f_name + "_old.txt")
 	pos_count = 0
 
 	def append_data(line:str, data:str):
-		return "{}{}".format(data, line) if append_type else "{}{}".format(line, data)
+		return data + line if append_type else line + data
 
 	if not isfile(file_targ):
-		exit("File \"{}\" not exist".format(file_targ))
+		exit(f"File \"{file_targ}\" not exist")
 
 	if isfile(file_temp):
 		remove(file_temp)
@@ -204,14 +204,14 @@ def file_append(f_path:str, f_name:str, data:str, position, append_type:bool = F
 
 def file_clear(f_path:str, f_name:str, start_pos, end_pos):
 	file_targ = join(f_path, f_name)
-	file_temp = join(f_path, "{}_temp.txt".format(f_name))
-	file_old  = join(f_path, "{}_old.txt".format(f_name))
+	file_temp = join(f_path, f_name + "_temp.txt")
+	file_old  = join(f_path, f_name + "_old.txt")
 	start_pos_count = 0
 	end_pos_count = 0
 	flag_clear = False
 
 	if not isfile(file_targ):
-		exit("File \"{}\" not exist".format(file_targ))
+		exit(f"File \"{file_targ}\" not exist")
 
 	if isfile(file_temp):
 		remove(file_temp)
@@ -263,17 +263,37 @@ def get_data(ws, target, input_range, cur_row):
 		if (target in get_cell_value(ws, input_cell)):
 			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
 				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-				data = '{}{}, '.format(data, cur_input_param)
+				data += f'{cur_input_param}, '
 			else:
-				#data = '{}{{'.format(data)
 				element_cell = coor_shift_down(ws, input_cell)
 				while element_cell['lastcol'] <= input_cell['lastcol']:
 					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
-					#data = data + str(cur_input_param) + ', '
-					data = '{}{}, '.format(data, cur_input_param)
+					data += f'{cur_input_param}, '
 					element_cell = coor_shift_right(ws, element_cell)
 
-				#data = '{}}}, '.format(data[:-2])
+		input_cell = coor_shift_right(ws, input_cell)
+	return data
+
+# Extract data from PCL with specific target
+def get_data_with_bralet(ws, target, input_range, cur_row):
+	data = ''
+	input_cell = coor_shift_down(ws, input_range)
+	while input_cell['lastcol'] <= input_range['lastcol']:
+		# Check input cell merged range, if merge range use {var1, var2}
+		if (target in get_cell_value(ws, input_cell)):
+			if (input_cell['lastcol'] - input_cell['firstcol']) == 0:
+				cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
+				data += f'{cur_input_param}, '
+			else:
+
+				data = f'{data}{{'
+				element_cell = coor_shift_down(ws, input_cell)
+				while element_cell['lastcol'] <= input_cell['lastcol']:
+					cur_input_param = get_cell_value(ws, [element_cell['firstcol'], cur_row])
+					data += f'{cur_input_param}, '
+					element_cell = coor_shift_right(ws, element_cell)
+
+				data = f'{data[:-2]}}}, '
 
 		input_cell = coor_shift_right(ws, input_cell)
 	return data
@@ -288,7 +308,7 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	output_element = coor_find_cell(ws, 'Output element')
 	# Create file .h
 
-	dot_h_dir = '{}test_{}.h'.format(src_dir, worksheet)
+	dot_h_dir = f'{src_dir}test_{worksheet}.h'
 	dot_h = open(dot_h_dir, 'w')
 
 	# Begin of file
@@ -309,17 +329,17 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 		# Add test case number to data
 		tc_num = get_cell_value(ws, [testcase_col, cur_row])
 		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
-		data = '{}\"{}\", '.format(data, tc_num)
+		data += f'\"{tc_num}\", '
 		# Add description to data - Named: Item
-		describe = '{}_{}'.format(worksheet, tc_num)
-		data = '{}\"{}\", '.format(data, describe)
+		describe = f'{worksheet}_{tc_num}'
+		data += f'\"{describe}\", '
 		del describe
 
 		# Add expected calls sequence
 		# In case not check sequence of calling stub function
 		# TODO: Add feature: many instance in sequence
 
-		data = '{}"'.format(data)
+		data += '"'
 		CELL = coor_shift_down(ws, input_factor)
 		list_of_function_called = list()
 		count = 0
@@ -344,42 +364,49 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 
 				FUNCINSTANCE = ''
 				if (FRETVAL != None) and (FRETVAL != '-'):
-					#FUNCINSTANCE = '{}#{}_{}'.format(FNAME, tc_num, list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1])
 					FUNCINSTANCE = f'{FNAME}#{tc_num}_{count}'
 					if check_sequence == True:
-						data = '{}{}; '.format(data, FUNCINSTANCE)
+						data += f'{FUNCINSTANCE}; '
 					else:
-						data = '{}{{{}}} '.format(data, FUNCINSTANCE)
+						data += f'{{{FUNCINSTANCE}}} '
 				count += 1
 			CELL = coor_shift_right(ws, CELL)
-		data = '{}\", '.format(data)
+		data = f'{data}\", '
 
 		# Add execute - 1: execute this function
 		judgment = coor_find_cell(ws, 'Judgment')
 		if ('Exclude' in get_cell_value(ws, [judgment['firstcol'], cur_row])):
-			data = '{}0, '.format(data)
+			data = f'{data}0, '
 		else:
-			data = '{}1, '.format(data)
+			data = f'{data}1, '
 
 		# Add input param by detect [a]
 		# TODO: Add detect structure - DONE
 
-		data = data + get_data(ws, '[a]', input_factor, cur_row)
+		data += get_data(ws, '[a]', input_factor, cur_row)
 
 		# Add global variable by detect [g]
-		data = data + get_data(ws, '[g]', input_factor, cur_row)
+		data += get_data(ws, '[g]', input_factor, cur_row)
 
+		if ("FillRect" in worksheet):
+			temp_data = get_data_with_bralet(ws, '[a]', output_element, cur_row)
+		else:
+			temp_data = get_data(ws, '[a]', output_element, cur_row)
 		# TODO: Add detect check [a] param output - DONE
-		data = data + get_data(ws, '[a]', output_element, cur_row)
+		#temp_data = get_data(ws, '[a]', output_element, cur_row)
+		if '-,' in temp_data:
+			temp_data = temp_data.replace('-,', 'DONTCARE,')
+		data += temp_data
+		del temp_data
 
 		# Add expected global variable by detect [g] in output element
-		data = data + get_data(ws, '[g]', output_element, cur_row)
+		data += get_data(ws, '[g]', output_element, cur_row)
 
 		# Add test result by detect 'Return value' in output element
-		data = data + get_data(ws, 'Return value', output_element, cur_row)
+		data += get_data(ws, 'Return value', output_element, cur_row)
 
 		# Write all the data to file
-		data = '{}}},\n'.format(data[:-2])
+		data = f'{data[:-2]}}},\n'
 		dot_h.write(data)
 
 	# End of file
@@ -388,132 +415,6 @@ def create_test_case_file(ws, worksheet, src_dir, src, check_sequence):
 	dot_h.close()
 	del dot_h
 
-# Create stub instance - OLD
-'''
-def create_stub_file(ws, worksheet, src_dir, src):
-	# Create stub function
-	# Get the first test case's row, and the last test case's row, and the current col
-	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
-	# Get Input factor range
-	input_factor = coor_find_cell(ws, 'Input factor')
-	# Get Output element range
-	output_element = coor_find_cell(ws, 'Output element')
-
-	for cur_row in range(start_row, end_row + 1):
-		# Get test case number
-		tc_num = get_cell_value(ws, [testcase_col, cur_row])
-		tc_num = tc_num[:tc_num.find('-')] + '_' + tc_num[tc_num.find('-') + 1:]
-		# Create instance for test case num
-
-		list_of_function_called = list()
-		input_cell = coor_shift_down(ws, input_factor)
-		while input_cell['lastcol'] <= input_factor['lastcol']:
-			# Check [rt]
-			#cur_input_param = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-			CELL_VAL = get_cell_value(ws, input_cell)
-			if ('[rt]' in CELL_VAL):
-				FNAME = CELL_VAL[CELL_VAL.find(' ') + 1 : CELL_VAL.find('(')]
-				del CELL_VAL
-				# Check loop of instance
-				if (FNAME not in dict(list_of_function_called)):
-					list_of_function_called.append([FNAME, 0])
-				else:
-					function_count = list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]
-					list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1] = function_count + 1
-
-				void_return_type = False
-
-				# Get function name
-				FNAME = get_cell_value(ws, input_cell)
-
-				if 'void' in FNAME[:FNAME.find('(')]:
-					void_return_type = True
-
-				# Extract function name from [rt]type function_name(...);
-				FNAME = FNAME[FNAME.find(' ') + 1: FNAME.find('(')]
-
-				# TODO: title is Isolate, need to implement for other title, Stub, Wrapper
-				title = '/* Isolate for function %s */\n' %(FNAME)
-				# Set instance
-				if_instance = '\tIF_INSTANCE(\"%s\") {\n' %(tc_num + '_' + str(list_of_function_called[list(dict(list_of_function_called)).index(FNAME)][1]))
-				outval_data = ''
-
-				# CHECK DATA input of stub function
-				check_data = ''
-				output_cell = coor_shift_down(ws, output_element) 
-				while output_cell['lastcol'] <= output_element['lastcol']:
-					# Check [f] symbol and check the function name
-					if ('[f]' in get_cell_value(ws, output_cell)) and (FNAME in get_cell_value(ws, output_cell)):
-						check_point = coor_shift_down(ws, output_cell)
-						while check_point['lastcol'] <= output_cell['lastcol']:
-
-							# TODO: add replace 'CHECK_S_INT' - Done
-							check_point_val = str(get_cell_value(ws, [check_point['firstcol'] , cur_row]))
-							if (check_point_val != None) and (check_point_val) != '-':
-
-								# Classify the check value
-								if ('UTS_NON0' in check_point_val) or ('false' in check_point_val) or ('true' in check_point_val): 
-									check_data = '{}\t\tCHECK_BOOLEAN(({} != NULL), true);\n'.format(check_data, get_cell_value(ws, check_point))
-								elif ('NULL' in check_point_val) or (check_point_val.isupper()) or ('&' in check_point_val) or ('Connection' in check_point_val):
-									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
-								elif (check_point_val.isdigit()):
-									check_data = '{}\t\tCHECK_S_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
-								elif ('u' or 'U' in check_point_val):
-									check_data = '{}\t\tCHECK_U_INT({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
-								else:
-									check_data = '{}\t\tCHECK_ADDRESS({}, {});\n'.format(check_data, get_cell_value(ws, check_point), check_point_val)
-
-							check_point = coor_shift_right(ws, check_point)
-					output_cell = coor_shift_right(ws, output_cell)
-
-				# Function output value
-				if input_cell['lastcol'] < input_factor['lastcol']:
-					outval_range = coor_shift_right(ws, input_cell)
-					if ('[f]' in get_cell_value(ws, outval_range)):
-						outval_cell = coor_shift_down(ws, outval_range)
-						while outval_cell['lastcol'] <= outval_range['lastcol']:
-							outval = str(get_cell_value(ws, [outval_cell['firstcol'], cur_row]))
-							if (outval != None) and (outval != '-'):
-								if ('UTS' in outval):
-									return_val = get_cell_value(ws, outval_cell)
-									if '*' in return_val:
-										outval_data = '{}\t\t{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
-									else:
-										outval_data = '{}\t\t*{} = {}&local;\n'.format(outval_data, return_val, outval[:outval.find(')') + 1])
-								else:
-									return_val = get_cell_value(ws, outval_cell)
-									if '*' in return_val:
-										outval_data = '{}\t\t{} = {};\n'.format(outval_data, return_val, outval)
-									else:
-										outval_data = '{}\t\t*{} = {};\n'.format(outval_data, return_val, outval)
-							outval_cell = coor_shift_right(ws, outval_cell)
-
-				# Set return value for Stub function
-				return_value = get_cell_value(ws, [input_cell['firstcol'], cur_row])
-
-				instance_existed = True
-
-				if void_return_type == True:
-					data_return = '\t\treturn;\n\t}\n'
-				else:
-					if return_value != None and return_value != '-':
-						data_return = '\t\treturn {};\n\t}}\n'.format(return_value)
-					else:
-						# This instance is not used
-						instance_existed = False
-
-				if instance_existed:
-					data = if_instance + check_data + outval_data + data_return
-
-					# Get position for append data to source
-					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
-					# Write file to test program of Cantata
-
-					file_append(src_dir, "test_{}.c".format(src), data, position, True)
-					data = title + data
-
-			input_cell = coor_shift_right(ws, input_cell)
-'''
 # Create stub instance
 def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 	start_row, end_row, testcase_col = row_of_testcase(ws, '#')
@@ -529,6 +430,12 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 	def get_check_type(val:str)->str:
 		type_1 = ['true', 'false']
 
+		if  ("_CH") in val:
+			return "CHECK_ADDRESS"
+
+		if ("OFFSET") in val:
+			return "CHECK_U_INT"
+
 		for i in type_1:
 			if i in val:
 				return 'CHECK_BOOLEAN'
@@ -543,13 +450,18 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 			if val.replace('u', '').replace('U', '').isdigit:
 				return 'CHECK_U_INT'
 
+		try:
+			a = int(val)
+		except:
+			pass
+		else:
+			return 'CHECK_S_INT'
+
 		if val.upper:
 			return 'CHECK_ADDRESS'
 
-		if val.isdigit:
-			return 'CHECK_S_INT'
+		return 'CHECK_S_INT'
 
-		return 'CHECK_ADDRESS'
 	for cur_row in range(start_row, end_row + 1):
 		func_list = list()
 		tc_num = get_cell_value(ws, [testcase_col, cur_row]).replace('-', '_')
@@ -577,7 +489,7 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 					if 'void' in func_type:
 						return_data = '\t\treturn;\n'
 					else:
-						return_data = '\t\treturn {};\n'.format(cur_val)
+						return_data = f'\t\treturn {cur_val};\n'
 					# END: Set return value of funtion
 					# START: Set output value of function
 					temp_cell_2_left = coor_shift_right(ws, cell_2_left)
@@ -598,14 +510,17 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 										cast_type = ''
 
 									if '*' in cell_3_left_val:
-										output_data = '{}\t\t{} = {}&local;\n'.format(output_data, cell_3_left_val, cast_type)
+										output_data = f'{output_data}\t\t{cell_3_left_val} = {cast_type}&local;\n'
 									else:
-										output_data = '{}\t\t*{} = {}&local;\n'.format(output_data, cell_3_left_val, cast_type)
+										output_data = f'{output_data}\t\t*{cell_3_left_val} = {cast_type}&local;\n'
 								else:
-									if '*' in cell_3_left_val:
-										output_data = '{}\t\t{} = {};\n'.format(output_data, cell_3_left_val, cur_val)
+									if '->' in cell_3_left_val:
+										output_data = f'{output_data}\t\t{cell_3_left_val} = {cur_val};\n'
 									else:
-										output_data = '{}\t\t*{} = {};\n'.format(output_data, cell_3_left_val, cur_val)
+										if '*' in cell_3_left_val:
+											output_data = f'{output_data}\t\t{cell_3_left_val} = {cur_val};\n'
+										else:
+											output_data = f'{output_data}\t\t*{cell_3_left_val} = {cur_val};\n'
 
 							cell_3_left = coor_shift_right(ws, cell_3_left)
 					# END: Set output value of function
@@ -633,7 +548,10 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 									cur_val = get_cell_value(ws, [cell_3_right['firstcol'], cur_row])
 									if cur_val != 'None' and cur_val != '-':
 										if 'UTS_' in cur_val:
-											check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} != NULL), true);\n'
+											if ('kbase' == cell_3_right_val) or ('vect' == cell_3_right_val):
+												check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} != 0), true);\n'
+											else:
+												check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} != NULL), true);\n'
 										elif 'NULL' in cur_val:
 											check_data = f'{check_data}\t\tCHECK_BOOLEAN(({cell_3_right_val} == NULL), true);\n'
 										else:
@@ -645,9 +563,10 @@ def create_stub_file(ws, worksheet:str, src_dir:str, src:str):
 					# END: Output element process
 
 					final_data = f'{instance_data}{check_data}{output_data}{return_data}\t}}\n'
-
+					del instance_data, check_data, output_data, return_data
 
 					position = [title, 'IF_INSTANCE("default")', '}', 'LOG_SCRIPT_ERROR']
+
 					file_append(src_dir, f"test_{src}.c", final_data, position, True)
 
 				count += 1
@@ -688,27 +607,31 @@ def pcl_to_testprogram(ws):
 				exist = True
 			###
 			if exist == False and is_global == False:
-				temp_data = '\t\t{};\n'.format(cell_2_val.replace('[a]', '').replace('[g]', '').replace(';', ''))
-				data_1 = '{}{}'.format(data_1, temp_data)
+				temp_cell_2_val = cell_2_val.replace('[a]', '').replace('[g]', '').replace(';', '')
+				temp_data = f'\t\t{temp_cell_2_val};\n'
+				data_1 += f'{temp_data}'
+				del temp_cell_2_val
 
 			if (cell_2['lastcol'] - cell_2['firstcol'] == 0) and (exist == False):
 				'''NOT MERGED CELL'''
 
 				if is_cell_2_pointer:
 					###
-					temp_data = '\t{} local_{};\n'.format(cell_2_type, cell_2_name)
-					data_2 = '{}{}'.format(data_2, temp_data)
+					temp_data = f'\t{cell_2_type} local_{cell_2_name};\n'
+					data_2 += f'{temp_data}'
 					###
-					temp_data = '\t\t\tif (CURRENT_TEST.{name} != NULL){{\n\t\t\t\tCURRENT_TEST.{name} = &local_{name};\n\t\t\t}}\n'.format(name = cell_2_name)
-					data_3 = '{}{}'.format(data_3, temp_data)
+					temp_data = f'\t\t\tif (CURRENT_TEST.{cell_2_name} != NULL){{\n\t\t\t\tCURRENT_TEST.{cell_2_name} = &local_{cell_2_name};\n\t\t\t}}\n'
+					data_3 += f'{temp_data}'
 				pass
 
 			else:
 				'''IS MERGED CELL'''
 				cell_2_number = ''
 				if '[' in cell_2_val:
-					cell_2_number = '_{}'.format(cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')])
+					temp_cell_2_number = cell_2_val[cell_2_val.find('[') + 1 : cell_2_val.find(']')]
+					cell_2_number = f'_{temp_cell_2_number}'
 					cell_2_val = cell_2_val.replace('[', '_').replace(']', '')
+					del temp_cell_2_number
 
 				cell_3 = coor_shift_down(ws, cell_2)
 				while cell_3['lastcol'] <= cell_2['lastcol']:
@@ -717,34 +640,32 @@ def pcl_to_testprogram(ws):
 					is_cell_3_pointer = check_pointer(ws, cell_3_val)
 					is_cell_3_structure = check_structure(ws, cell_3_val)
 					###
-					# if '[' in cell_3_name:
-					# 	cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-					# 	cell_3_name = cell_3_name[: cell_3_name.find('[')]
 					cell_3_name_new = cell_3_name
 					if '[' in cell_3_name:
 						number = cell_3_name[cell_3_name.find('[') + 1 : cell_3_name.find(']')]
 						try:
 							number = int(number)
-							#cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
-							cell_2_number = '_{}'.format(number)
+							cell_2_number = f'_{number}'
 							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 
 						except:
-							cell_2_number = '{}{}'.format(cell_2_number, cell_3_name[cell_3_name.find('['):])
+							start_temp = cell_3_name.find('[')
+							cell_2_number += f'{cell_3_name[start_temp:]}'
 							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
+							del start_temp
 					###
 					if '[' in cell_3_val:
 						cell_3_val = cell_3_val[: cell_3_val.find('[')]
-					temp_data = '\t\t{}{};\n'.format(cell_3_val, cell_2_number)
-					data_1 = '{}{}'.format(data_1, temp_data)
+					temp_data = f'\t\t{cell_3_val}{cell_2_number};\n'
+					data_1 += f'{temp_data}'
 
 					if is_cell_3_pointer:
 						###
-						temp_data = '\t{} local_{};\n'.format(cell_3_type, cell_3_name_new)
-						data_2 = '{}{}'.format(data_2, temp_data)
+						temp_data = f'\t{cell_3_type} local_{cell_3_name_new};\n'
+						data_2 += f'{temp_data}'
 						###
 						temp_data = '\t\t\tif (CURRENT_TEST.{name}{number} != NULL){{\n\t\t\t\tCURRENT_TEST.{name}{number} = &local_{name};\n\t\t\t}}\n'.format(name = cell_3_name_new, number = cell_2_number)
-						data_3 = '{}{}'.format(data_3, temp_data)
+						data_3 += f'{temp_data}'
 					###
 					if is_global:
 						# if is_cell_3_pointer:
@@ -756,12 +677,12 @@ def pcl_to_testprogram(ws):
 							temp_data = '\t\t\tstrcpy({}.{}, CURRENT_TEST.{}{});\n'.format(cell_2_name, cell_3_name, cell_3_name_new, cell_2_number)
 						else:
 							temp_data = '\t\t\t{}{}{} = CURRENT_TEST.{}{};\n'.format(cell_2_name, access, cell_3_name, cell_3_name_new, cell_2_number)
-						data_3 = '{}{}'.format(data_3, temp_data)
+						data_3 += f'{temp_data}'
 
 					if exist:
 						temp_data = '\t\t\tlocal_{cell_2_name}.{cell_3_name} = CURRENT_TEST.{cell_3_name};\n'.format(\
 							cell_2_name = cell_2_name, cell_3_name = cell_3_name_new)
-						data_3 = '{}{}'.format(data_3, temp_data)
+						data_3 += f'{temp_data}'
 
 					cell_3 = coor_shift_right(ws, cell_3)
 				pass
@@ -796,37 +717,45 @@ def pcl_to_testprogram(ws):
 				if is_cell_2_pointer:
 					###
 					temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name)
-					data_1 = '{}{}'.format(data_1, temp_data)
+					data_1 += f'{temp_data}'
 
 					init_val = get_cell_value(ws, coor_shift_down(ws, cell_2))
 					if init_val != '-' and init_val != None:
 						###
 						temp_data = '\t\t\tlocal_{} = {};\n'.format(cell_2_name, init_val)
-						data_3 = '{}{}'.format(data_3, temp_data)
+						data_3 += f'{temp_data}'
 
 					###
 					check_type = select_check_type(ws, cell_2_val)
+					'''
 					temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
 						check = check_type,\
 						left = 'local_{}'.format(cell_2_name),\
 						right = 'CURRENT_TEST.expected_{}'.format(cell_2_name)\
 					)
-					data_4 = '{}{}'.format(data_4, temp_data)
+					'''
+					temp_data =  f'\t\t\tif (CURRENT_TEST.expected_{cell_2_name} != DONTCARE) {{\n'
+					temp_data += f'\t\t\t\t{check_type}(local_{cell_2_name}, CURRENT_TEST.expected_{cell_2_name});\n'
+					temp_data += f'\t\t\t}}'
+					data_4 += f'{temp_data}'
 
 				if is_global:
 					if '[' in cell_2_name:
 						temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name.replace("[", "_").replace("]", ""))
 					else:
 						temp_data = '\t\t{} expected_{};\n'.format(cell_2_type, cell_2_name)
-					data_1 = '{}{}'.format(data_1, temp_data)
+					data_1 += f'{temp_data}'
 
 					check_type = select_check_type(ws, cell_2_val)
+					'''
 					temp_data = '\t\t\t{check}({left}, {right});\n'.format(\
 						check = check_type,\
 						left = '{}'.format(cell_2_name),\
 						right = 'CURRENT_TEST.expected_{}'.format(cell_2_name.replace("[", "_").replace("]", ""))\
 					)
-					data_4 = '{}{}'.format(data_4, temp_data)
+					'''
+					temp_data = f'\t\t\t{check_type}({cell_2_name}, CURRENT_TEST.expected_{cell_2_name.replace("[", "_").replace("]", "")});\n'
+					data_4 += f'{temp_data}'
 					pass
 
 				pass
@@ -858,7 +787,7 @@ def pcl_to_testprogram(ws):
 							cell_3_name_new = cell_3_name[: cell_3_name.find('[')]
 
 					temp_data = '\t\t{} expected_{}{};\n'.format(cell_3_type, cell_3_name_new, cell_2_number)
-					data_1 = '{}{}'.format(data_1, temp_data)
+					data_1 += f'{temp_data}'
 
 					###
 					if is_global:
@@ -873,7 +802,7 @@ def pcl_to_testprogram(ws):
 							left = '{}{}{}'.format(cell_2_name, access, cell_3_name),\
 							right = 'CURRENT_TEST.expected_{}{}'.format(cell_3_name_new, cell_2_number)\
 						)
-						data_4 = '{}{}'.format(data_4, temp_data)
+						data_4 += f'{temp_data}'
 
 					cell_3 = coor_shift_right(ws, cell_3)
 				pass
@@ -904,8 +833,8 @@ def get_input_argument(ws, top_cell_name:str, target:str)->str:
 				pass
 			else:
 				list_of_handle.append(cell_2_name)
-				data_append = 'CURRENT_TEST.{},'.format(cell_2_name)
-				data = '{}{}'.format(data, data_append)
+				data_append = f'CURRENT_TEST.{cell_2_name},'
+				data += f'{data_append}'
 
 		###	Next of while
 		cell_2 = coor_shift_right(ws, cell_2)
@@ -915,7 +844,7 @@ def get_input_argument(ws, top_cell_name:str, target:str)->str:
 def create_test_program(ws, func_name:str)->str:
 	data_1, data_2, data_3, data_4 = pcl_to_testprogram(ws)
 	input_argument = get_input_argument(ws, 'Input factor', '[a]')
-	data = '''\
+	data = f'''\
 void test_{func_name}(){{
 	struct CPPTH_LOOP_INPUT_STRUCT {{
 		/* Test case data declarations */
@@ -947,12 +876,5 @@ void test_{func_name}(){{
 		END_CALLS();
 	END_TEST_LOOP();
 }}
-'''.format(\
-	func_name = func_name,\
-	data_1 = data_1,\
-	data_2 = data_2,\
-	data_3 = data_3,\
-	data_4 = data_4,\
-	input_argument = input_argument\
-	)
+'''
 	return data

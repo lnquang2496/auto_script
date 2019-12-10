@@ -34,6 +34,14 @@ def main(argv):
 #include <stdio.h>
 #include <unistd.h>
 #define UTS_NON0 1
+#define DONTCARE 0xABCD
+'''
+
+	data1_old = '''\
+#include <stdio.h>
+#include <unistd.h>
+#define UTS_NON0 1
+#define DONTCARE 0xABCD
 
 #undef IMR_IODEV_IMRCH0
 #undef IMR_IODEV_IMRCH1
@@ -119,6 +127,7 @@ def main(argv):
 #define IMR_SEM_SYNC_CH4   (734U)
 #define IMR_SEM_SYNC_CH5   (735U)
 '''
+
 	data2 = '''\
 	int ret;
 	char *buffer;

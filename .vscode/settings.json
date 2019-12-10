@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "test_r_imr_drvknl_iodev_init.h": "c",
+        "test_r_imr_drvapi_get_precision.h": "c",
+        "test_r_imr_fillrect.h": "c"
+    }
+}

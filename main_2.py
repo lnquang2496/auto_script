@@ -40,33 +40,16 @@ def main(argv):
 		pbar.update(1)
 		# Create test program
 
-		data = common.create_test_program(ws, worksheet)
 		pbar.update(1)
-
-		start_pos = ["/* Test Cases                                                                */",\
-					"/*****************************************************************************/",\
-					"/*****************************************************************************/"]
-
-		common.file_append(src_dir, "test_{}.c".format(source), data, start_pos, True)
 		pbar.update(1)
-		start_pos = ["/* Prototypes for test functions */",\
-					"void run_tests();",\
-					"/*****************************************************************************/"]
-		func_prototype = "void test_{}();\n".format(worksheet)
-		common.file_append(src_dir, "test_{}.c".format(source), func_prototype, start_pos, True)
 		pbar.update(1)
-		start_pos = ["/* Test Control                                                              */",\
-					"void run_tests()",\
-					"rule_set(\"*\", \"*\");"]
-		func_prototype = "\ttest_{}();\n".format(worksheet)
-		common.file_append(src_dir, "test_{}.c".format(source), func_prototype, start_pos, True)
 		pbar.update(1)
 
 		#Create file dot h, contain all the test case
 		common.create_test_case_file(ws, worksheet, src_dir, source, check_sequence)
 		pbar.update(1)
 		#Create stub function
-		common.create_stub_file(ws, worksheet, src_dir, source)
+		# common.create_stub_file(ws, worksheet, src_dir, source)
 		pbar.update(1)
 
 if __name__ == "__main__":
